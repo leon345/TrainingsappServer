@@ -11,6 +11,7 @@ import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -73,6 +74,21 @@ public class PasskeyResource {
         PasskeyResponse neu = PasskeyResponse.from(
                 service.weiterenPasskeyAbschliessen(angemeldet(), credential.toString()));
         return Response.status(Response.Status.CREATED).entity(neu).build();
+    }
+
+    @PATCH
+    @Path("/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(operationId = "renamePasskeyV1", summary = "Passkey umbenennen")
+    @APIResponse(responseCode = "200", description = "Umbenannt")
+    @APIResponse(responseCode = "400", description = "Bezeichnung fehlt oder ungueltig")
+    @APIResponse(responseCode = "401", description = "Nicht angemeldet")
+    @APIResponse(responseCode = "404", description = "Kein eigener Passkey mit dieser ID")
+    public PasskeyResponse umbenennen(@PathParam("id") String id, PasskeyUmbenennenRequest request) {
+        if (request == null) {
+            throw new BadRequestException("bezeichnung fehlt");
+        }
+        return PasskeyResponse.from(service.benenneUm(angemeldet(), new PasskeyId(id), request.bezeichnung()));
     }
 
     @DELETE

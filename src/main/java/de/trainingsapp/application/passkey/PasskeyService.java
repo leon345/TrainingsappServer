@@ -9,7 +9,9 @@ import de.trainingsapp.domain.benutzer.BenutzerRepository;
 import de.trainingsapp.domain.benutzer.Benutzername;
 import de.trainingsapp.domain.benutzer.UngueltigerBenutzername;
 import de.trainingsapp.domain.passkey.Passkey;
+import de.trainingsapp.domain.passkey.PasskeyBezeichnung;
 import de.trainingsapp.domain.passkey.PasskeyId;
+import de.trainingsapp.domain.passkey.UngueltigeBezeichnung;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -18,7 +20,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -129,7 +132,7 @@ public class PasskeyService {
 
     public BenutzerId anmeldungAbschliessen(String antwortJson) {
         Passkey verwendet = zeremonie.anmeldungPruefen(antwortJson);
-        transaktion.ausfuehren(() -> passkeys.aktualisiereZaehler(verwendet.id(), verwendet.zaehler()));
+        transaktion.ausfuehren(() -> passkeys.vermerkeAnmeldung(verwendet.id(), verwendet.zaehler(), heute()));
         sitzung.starte(verwendet.benutzerId());
         return verwendet.benutzerId();
     }
@@ -149,9 +152,23 @@ public class PasskeyService {
     }
 
     public List<Passkey> liste(BenutzerId angemeldet) {
-        return passkeys.findeFuer(angemeldet).stream()
-                .sorted(Comparator.comparing(Passkey::erstelltAm))
-                .toList();
+        return passkeys.findeFuer(angemeldet);
+    }
+
+    /**
+     * Benennt einen eigenen Passkey um (E29).
+     *
+     * @throws UngueltigeBezeichnung wenn die Bezeichnung gegen die Regeln verstoesst
+     * @throws PasskeyNichtGefunden  wenn es keinen eigenen Passkey mit dieser ID gibt
+     */
+    public Passkey benenneUm(BenutzerId angemeldet, PasskeyId id, String eingabe) {
+        PasskeyBezeichnung bezeichnung = PasskeyBezeichnung.aus(eingabe);
+        return transaktion.ausfuehren(() -> {
+            if (!passkeys.benenneUm(angemeldet, id, bezeichnung)) {
+                throw new PasskeyNichtGefunden(id.wert());
+            }
+            return passkeys.findeNachId(id).orElseThrow();
+        });
     }
 
     public void loesche(BenutzerId angemeldet, PasskeyId id) {
@@ -162,12 +179,19 @@ public class PasskeyService {
         }
     }
 
+    /** Nur innerhalb einer Transaktion: vergibt "Passkey n" und speichert. */
     private Passkey speichere(BenutzerId benutzerId, PasskeyZeremonie.NeuerPasskey neu) {
-        Passkey passkey = new Passkey(neu.id(), benutzerId, neu.aaguid(), neu.publicKey(), neu.algorithmus(),
-                neu.zaehler(), uhr.instant());
+        PasskeyBezeichnung bezeichnung = PasskeyBezeichnung.automatisch(benutzer.naechstePasskeyNummer(benutzerId));
+        Passkey passkey = new Passkey(neu.id(), benutzerId, bezeichnung, neu.publicKey(), neu.algorithmus(),
+                neu.zaehler(), heute(), null);
         if (!passkeys.fuegeHinzu(passkey)) {
             throw new PasskeyPruefungFehlgeschlagen("Passkey ist bereits registriert");
         }
         return passkey;
+    }
+
+    /** Heutiger Tag in UTC (E29). */
+    private LocalDate heute() {
+        return LocalDate.ofInstant(uhr.instant(), ZoneOffset.UTC);
     }
 }

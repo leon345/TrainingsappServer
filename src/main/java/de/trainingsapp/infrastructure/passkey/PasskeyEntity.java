@@ -4,7 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -24,7 +24,8 @@ public class PasskeyEntity {
     @Column(nullable = false)
     public UUID benutzerId;
 
-    public UUID aaguid;
+    @Column(nullable = false, length = 50)
+    public String bezeichnung;
 
     @Column(nullable = false)
     public byte[] publicKey;
@@ -36,5 +37,7 @@ public class PasskeyEntity {
     public long zaehler;
 
     @Column(nullable = false)
-    public Instant erstelltAm;
+    public LocalDate erstelltAm;
+
+    public LocalDate zuletztVerwendetAm;
 }

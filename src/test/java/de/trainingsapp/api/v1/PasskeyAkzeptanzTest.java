@@ -3,6 +3,7 @@ package de.trainingsapp.api.v1;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
@@ -26,6 +27,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -86,9 +89,15 @@ class PasskeyAkzeptanzTest {
         CookieFilter browserHandy = anmelden(handy);
         CookieFilter browserLaptop = anmelden(laptop);
 
-        // 3. Auflisten: beide Passkeys, aus beiden Sitzungen gleich (gleicher Benutzer)
+        // 3. Auflisten: beide Passkeys, aus beiden Sitzungen gleich (gleicher Benutzer);
+        //    automatische Bezeichnungen und Tag der letzten Anmeldung (E29)
+        String heute = LocalDate.now(ZoneOffset.UTC).toString();
         List<String> ids = given().filter(browserHandy).get("/v1/passkeys")
-                .then().statusCode(200).body("$", hasSize(2)).extract().path("id");
+                .then().statusCode(200).body("$", hasSize(2))
+                .body("bezeichnung", containsInAnyOrder("Passkey 1", "Passkey 2"))
+                .body("erstelltAm", everyItem(equalTo(heute)))
+                .body("zuletztVerwendetAm", everyItem(equalTo(heute)))
+                .extract().path("id");
         given().filter(browserLaptop).get("/v1/passkeys")
                 .then().statusCode(200).body("id", containsInAnyOrder(ids.toArray()));
         String handyId = ids.stream().filter(id -> !id.equals(laptopId)).findFirst().orElseThrow();
@@ -123,6 +132,55 @@ class PasskeyAkzeptanzTest {
         given().get("/v1/passkeys").then().statusCode(401);
         given().post("/v1/passkeys/optionen").then().statusCode(401);
         given().delete("/v1/passkeys/abc").then().statusCode(401);
+        given().contentType(ContentType.JSON).body("{\"bezeichnung\":\"x\"}").patch("/v1/passkeys/abc")
+                .then().statusCode(401);
+    }
+
+    @Test
+    void umbenennenNurEigenerPasskeysMitGueltigerBezeichnung() {
+        CookieFilter browserA = registrieren("ulla", new WebAuthnHardware(url));
+        CookieFilter browserB = registrieren("udo", new WebAuthnHardware(url));
+        String idVonA = given().filter(browserA).get("/v1/passkeys").then().extract().path("[0].id");
+
+        // fremder Passkey: 404, Bezeichnung unveraendert
+        given().filter(browserB).contentType(ContentType.JSON).body("{\"bezeichnung\":\"gekapert\"}")
+                .patch("/v1/passkeys/" + idVonA).then().statusCode(404).body("code", equalTo("PASSKEY_NICHT_GEFUNDEN"));
+        given().filter(browserA).get("/v1/passkeys").then().body("[0].bezeichnung", equalTo("Passkey 1"));
+
+        // ungueltige Bezeichnungen: 400
+        for (String ungueltig : List.of("", "   ", "a".repeat(51), "Zero\u200Bwidth")) {
+            given().filter(browserA).contentType(ContentType.JSON)
+                    .body(new JsonObject().put("bezeichnung", ungueltig).encode())
+                    .patch("/v1/passkeys/" + idVonA).then().statusCode(400).body("code", equalTo("BEZEICHNUNG_UNGUELTIG"));
+        }
+
+        // eigener Passkey: 200, NFC und Trim
+        given().filter(browserA).contentType(ContentType.JSON)
+                .body(new JsonObject().put("bezeichnung", "  Schlu\u0308ssel im Bu\u0308ro ").encode())
+                .patch("/v1/passkeys/" + idVonA)
+                .then().statusCode(200).body("bezeichnung", equalTo("Schl\u00FCssel im B\u00FCro"));
+        given().filter(browserA).get("/v1/passkeys").then().body("[0].bezeichnung", equalTo("Schl\u00FCssel im B\u00FCro"));
+    }
+
+    @Test
+    void geloeschteNummernWerdenNichtWiederverwendet() {
+        WebAuthnHardware erstes = new WebAuthnHardware(url);
+        CookieFilter browser = registrieren("nora", erstes);
+        String zweiterId = weiterenHinzufuegen(browser, new WebAuthnHardware(url));
+        given().filter(browser).delete("/v1/passkeys/" + zweiterId).then().statusCode(204);
+
+        weiterenHinzufuegen(browser, new WebAuthnHardware(url));
+
+        given().filter(browser).get("/v1/passkeys").then().statusCode(200)
+                .body("bezeichnung", containsInAnyOrder("Passkey 1", "Passkey 3"));
+    }
+
+    private String weiterenHinzufuegen(CookieFilter browser, WebAuthnHardware geraet) {
+        String challenge = new JsonObject(given().filter(browser).post("/v1/passkeys/optionen")
+                .then().statusCode(200).extract().asString()).getString("challenge");
+        return given().filter(browser).contentType(ContentType.JSON)
+                .body(geraet.makeRegistrationJson(challenge).encode())
+                .post("/v1/passkeys").then().statusCode(201).extract().path("id");
     }
 
     @Test

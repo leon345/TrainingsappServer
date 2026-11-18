@@ -43,6 +43,7 @@ class PasskeyServiceRegistrierungTest {
     private final Benutzerablage benutzer = new Benutzerablage();
     private final Reservierungen ausstehende = new Reservierungen();
     private final Zeremonie zeremonie = new Zeremonie();
+    private final Passkeyablage passkeyablage = new Passkeyablage();
     private final List<BenutzerId> gestarteteSitzungen = new ArrayList<>();
     private PasskeyService service;
 
@@ -58,7 +59,7 @@ class PasskeyServiceRegistrierungTest {
             public void beende() {
             }
         };
-        service = new PasskeyService(benutzer, new Passkeyablage(), ausstehende, zeremonie, sitzung,
+        service = new PasskeyService(benutzer, passkeyablage, ausstehende, zeremonie, sitzung,
                 new DirekteTransaktion(), TTL,
                 Set.of(new Benutzername("admin")), uhr);
     }
@@ -143,6 +144,19 @@ class PasskeyServiceRegistrierungTest {
         assertTrue(ausstehende.eintraege.isEmpty());
     }
 
+    /** E29: erstellt_am ist der Tag in UTC, unabhaengig von der Zeitzone des Servers. */
+    @Test
+    void erstPasskeyHeisstPasskey1UndTraegtDenUtcTag() {
+        uhr.setze(Instant.parse("2026-11-18T23:30:00Z")); // in Berlin schon der 19.11.
+        service.registrierungStarten("anna");
+        BenutzerId angelegt = service.registrierungAbschliessen("anna", "{}");
+
+        Passkey passkey = passkeyablage.findeFuer(angelegt).get(0);
+        assertEquals("Passkey 1", passkey.bezeichnung().wert());
+        assertEquals(java.time.LocalDate.parse("2026-11-18"), passkey.erstelltAm());
+        assertEquals(null, passkey.zuletztVerwendetAm());
+    }
+
     @Test
     void ttlMussPositivSein() {
         for (Duration ttl : List.of(Duration.ZERO, Duration.ofSeconds(-1))) {
@@ -162,6 +176,10 @@ class PasskeyServiceRegistrierungTest {
 
         void vor(Duration dauer) {
             jetzt = jetzt.plus(dauer);
+        }
+
+        void setze(Instant zeitpunkt) {
+            jetzt = zeitpunkt;
         }
 
         @Override
@@ -197,6 +215,13 @@ class PasskeyServiceRegistrierungTest {
         @Override
         public boolean legeAn(Benutzer b) {
             return nachName.putIfAbsent(b.benutzername(), b) == null;
+        }
+
+        final Map<BenutzerId, Integer> nummern = new HashMap<>();
+
+        @Override
+        public int naechstePasskeyNummer(BenutzerId id) {
+            return nummern.merge(id, 1, Integer::sum);
         }
     }
 
@@ -234,8 +259,14 @@ class PasskeyServiceRegistrierungTest {
         }
 
         @Override
-        public void aktualisiereZaehler(PasskeyId id, long zaehler) {
+        public void vermerkeAnmeldung(PasskeyId id, long zaehler, java.time.LocalDate tag) {
             passkeys.computeIfPresent(id, (k, p) -> p.mitZaehler(zaehler));
+        }
+
+        @Override
+        public boolean benenneUm(BenutzerId benutzerId, PasskeyId id,
+                                 de.trainingsapp.domain.passkey.PasskeyBezeichnung bezeichnung) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -255,7 +286,7 @@ class PasskeyServiceRegistrierungTest {
 
         @Override
         public NeuerPasskey registrierungPruefen(String antwortJson) {
-            return new NeuerPasskey(new PasskeyId(UUID.randomUUID().toString()), null, new byte[] {1}, -7, 0);
+            return new NeuerPasskey(new PasskeyId(UUID.randomUUID().toString()), new byte[] {1}, -7, 0);
         }
 
         @Override

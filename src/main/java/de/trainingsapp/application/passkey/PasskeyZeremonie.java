@@ -44,6 +44,6 @@ public interface PasskeyZeremonie {
     Passkey anmeldungPruefen(String antwortJson);
 
     /** Daten eines neu registrierten, noch keinem Benutzer zugeordneten Passkeys. */
-    record NeuerPasskey(PasskeyId id, java.util.UUID aaguid, byte[] publicKey, long algorithmus, long zaehler) {
+    record NeuerPasskey(PasskeyId id, byte[] publicKey, long algorithmus, long zaehler) {
     }
 }

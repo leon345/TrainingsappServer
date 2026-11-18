@@ -79,7 +79,7 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
             throw new PasskeyPruefungFehlgeschlagen("Registrierung abgelehnt", e);
         }
         WebAuthnCredentialRecord.RequiredPersistedData d = record.getRequiredPersistedData();
-        return new NeuerPasskey(new PasskeyId(d.credentialId()), d.aaguid(), d.publicKey(),
+        return new NeuerPasskey(new PasskeyId(d.credentialId()), d.publicKey(),
                 d.publicKeyAlgorithm(), d.counter());
     }
 

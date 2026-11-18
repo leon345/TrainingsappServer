@@ -11,6 +11,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Bruecke von der Quarkus-WebAuthn-Extension zu unseren Ports. Die Extension liest
@@ -55,9 +56,12 @@ public class PasskeyWebAuthnUserProvider implements WebAuthnUserProvider {
         return new PasskeyId(Base64.getUrlEncoder().withoutPadding().encodeToString(roh));
     }
 
+    /** AAGUID wird nicht gespeichert (E29: keine Geraetedaten); fuer die Anmeldepruefung ist er ohne Bedeutung. */
+    private static final UUID OHNE_AAGUID = new UUID(0, 0);
+
     static WebAuthnCredentialRecord zuRecord(Passkey p, String username) {
         return WebAuthnCredentialRecord.fromRequiredPersistedData(
-                new WebAuthnCredentialRecord.RequiredPersistedData(username, p.id().wert(), p.aaguid(),
+                new WebAuthnCredentialRecord.RequiredPersistedData(username, p.id().wert(), OHNE_AAGUID,
                         p.publicKey(), p.algorithmus(), p.zaehler()));
     }
 }

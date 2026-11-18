@@ -53,4 +53,16 @@ public class PanacheBenutzerRepository implements BenutzerRepository, PanacheRep
                 .executeUpdate();
         return angelegt == 1;
     }
+
+    @Override
+    @Transactional(TxType.MANDATORY)
+    public int naechstePasskeyNummer(BenutzerId id) {
+        Objects.requireNonNull(id, "id");
+        Object nummer = getEntityManager().createNativeQuery("""
+                        UPDATE benutzer SET letzte_passkey_nummer = letzte_passkey_nummer + 1
+                        WHERE id = ?1 RETURNING letzte_passkey_nummer""")
+                .setParameter(1, id.wert())
+                .getSingleResult();
+        return ((Number) nummer).intValue();
+    }
 }
