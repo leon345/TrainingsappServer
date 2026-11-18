@@ -1,0 +1,11 @@
+-- V1: Grundlage der Persistenz (S-12).
+-- Enthaelt bewusst noch keine fachlichen Tabellen; diese folgen ab S-03
+-- als eigene Migrationen V2, V3, ...
+--
+-- Konventionen (siehe docs/persistenz.md):
+--   * Dateinamen: V<laufende Nummer>__<beschreibung_in_snake_case>.sql
+--   * Schema: public
+--   * Tabellen und Spalten: snake_case, Tabellen im Singular (z. B. workout)
+--   * Primaerschluessel: Spalte id vom Typ uuid, vergeben von der Anwendung
+--   * Zeitpunkte: timestamp with time zone, gespeichert in UTC
+--   * Eine einmal angewendete Migration wird nie mehr geaendert.
