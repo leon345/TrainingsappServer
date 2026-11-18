@@ -3,12 +3,24 @@ package de.trainingsapp.infrastructure.passkey;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
+import com.webauthn4j.data.attestation.AttestationObject;
+import com.webauthn4j.data.attestation.authenticator.AAGUID;
+import com.webauthn4j.data.attestation.authenticator.AttestedCredentialData;
+import com.webauthn4j.data.attestation.authenticator.AuthenticatorData;
+import com.webauthn4j.data.attestation.authenticator.EdDSACOSEKey;
+import com.webauthn4j.data.attestation.statement.COSEAlgorithmIdentifier;
+import com.webauthn4j.data.attestation.statement.NoneAttestationStatement;
+import com.webauthn4j.data.extension.authenticator.RegistrationExtensionAuthenticatorOutput;
 import io.quarkus.security.webauthn.WebAuthnCredentialRecord;
 import io.quarkus.security.webauthn.WebAuthnUserProvider;
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.interfaces.EdECPublicKey;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -60,8 +72,37 @@ public class PasskeyWebAuthnUserProvider implements WebAuthnUserProvider {
     private static final UUID OHNE_AAGUID = new UUID(0, 0);
 
     static WebAuthnCredentialRecord zuRecord(Passkey p, String username) {
+        if (p.algorithmus() == COSEAlgorithmIdentifier.EdDSA.getValue()) {
+            return eddsaRecord(p, username);
+        }
         return WebAuthnCredentialRecord.fromRequiredPersistedData(
                 new WebAuthnCredentialRecord.RequiredPersistedData(username, p.id().wert(), OHNE_AAGUID,
                         p.publicKey(), p.algorithmus(), p.zaehler()));
+    }
+
+    /**
+     * Umgehung fuer EdDSA (Befund, siehe {@code PasskeyRecordAlgorithmenTest}): In Quarkus 3.40.1.2 erzeugt
+     * {@code fromRequiredPersistedData} den Algorithmus mit {@code COSEAlgorithmIdentifier.create(-8)}, also
+     * als neue Instanz; webauthn4j 0.30.3 prueft in {@code EdDSACOSEKey.create} aber auf Identitaet mit der
+     * Konstante und lehnt ab. Ohne Umgehung ist ein EdDSA-Passkey registrierbar, aber nie zur Anmeldung nutzbar.
+     * Der Datensatz wird deshalb ueber den oeffentlichen Konstruktor aus einem minimalen Attestation-Objekt
+     * (Attestation "none") gebaut. Bei der Anmeldung nutzt webauthn4j daraus nur Schluessel, Credential-ID
+     * und Zaehler; rpIdHash und Flags dieses Hilfsobjekts werden nicht geprueft.
+     */
+    private static WebAuthnCredentialRecord eddsaRecord(Passkey p, String username) {
+        EdECPublicKey schluessel;
+        try {
+            schluessel = (EdECPublicKey) KeyFactory.getInstance("EdDSA")
+                    .generatePublic(new X509EncodedKeySpec(p.publicKey()));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalArgumentException("Ungueltiger EdDSA-Schluessel", e);
+        }
+        AttestedCredentialData daten = new AttestedCredentialData(AAGUID.ZERO,
+                Base64.getUrlDecoder().decode(p.id().wert()),
+                EdDSACOSEKey.create(schluessel, COSEAlgorithmIdentifier.EdDSA));
+        AuthenticatorData<RegistrationExtensionAuthenticatorOutput> authData = new AuthenticatorData<>(
+                new byte[32], (byte) (AuthenticatorData.BIT_UP | AuthenticatorData.BIT_AT), p.zaehler(), daten);
+        return new WebAuthnCredentialRecord(username, new AttestationObject(authData, new NoneAttestationStatement()),
+                null, null, null);
     }
 }
