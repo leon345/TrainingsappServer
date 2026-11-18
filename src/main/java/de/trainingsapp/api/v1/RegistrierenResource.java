@@ -30,7 +30,7 @@ public class RegistrierenResource {
     @Operation(operationId = "startRegistrierungV1", summary = "Registrierung starten",
             description = "Liefert PublicKeyCredentialCreationOptions und setzt das Challenge-Cookie.")
     @APIResponse(responseCode = "200", description = "Optionen fuer navigator.credentials.create()")
-    @APIResponse(responseCode = "400", description = "Benutzername fehlt")
+    @APIResponse(responseCode = "400", description = "Benutzername fehlt oder ungueltig (z. B. mit @)")
     @APIResponse(responseCode = "409", description = "Benutzername vergeben")
     public String optionen(RegistrierungStartenRequest request) {
         if (request == null || request.benutzername() == null || request.benutzername().isBlank()) {

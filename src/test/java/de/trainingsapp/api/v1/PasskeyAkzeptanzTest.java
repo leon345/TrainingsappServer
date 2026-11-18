@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -116,6 +117,15 @@ class PasskeyAkzeptanzTest {
         registrieren("dora", new WebAuthnHardware(url));
         given().contentType(ContentType.JSON).body("{\"benutzername\":\"dora\"}")
                 .post("/v1/registrieren/optionen").then().statusCode(409);
+    }
+
+    @Test
+    void benutzernameMitKlammeraffeIst400() {
+        // E17: Benutzernamen sind Pseudonyme, keine E-Mail-Adressen
+        given().contentType(ContentType.JSON).body("{\"benutzername\":\"anna@example.org\"}")
+                .post("/v1/registrieren/optionen")
+                .then().statusCode(400).body("code", equalTo("BENUTZERNAME_UNGUELTIG"))
+                .header("Set-Cookie", nullValue());
     }
 
     @Test

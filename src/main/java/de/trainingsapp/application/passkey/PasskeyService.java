@@ -3,6 +3,7 @@ package de.trainingsapp.application.passkey;
 import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
+import de.trainingsapp.domain.benutzer.Benutzername;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
@@ -46,7 +47,12 @@ public class PasskeyService {
 
     // --- Registrierung eines neuen Benutzers (unauthentifiziert) ---
 
+    /**
+     * @throws de.trainingsapp.domain.benutzer.UngueltigerBenutzername wenn der Name gegen E17 verstoesst
+     * @throws BenutzernameVergeben wenn der Name schon vergeben ist
+     */
     public String registrierungStarten(String benutzername) {
+        Benutzername.pruefe(benutzername);
         if (benutzer.findeNachName(benutzername).isPresent()) {
             throw new BenutzernameVergeben(benutzername);
         }
