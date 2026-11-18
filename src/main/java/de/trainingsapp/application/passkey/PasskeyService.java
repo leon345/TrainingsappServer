@@ -1,5 +1,7 @@
 package de.trainingsapp.application.passkey;
 
+import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
+import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
 import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
@@ -9,12 +11,13 @@ import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Anwendungsfaelle rund um Passkeys: Registrieren (neuer Benutzer), Anmelden,
@@ -27,21 +30,31 @@ public class PasskeyService {
     private final PasskeyRepository passkeys;
     private final PasskeyZeremonie zeremonie;
     private final Anmeldesitzung sitzung;
+    private final AusstehendeRegistrierungRepository ausstehende;
+    private final Duration registrierungTtl;
     private final Clock uhr;
-    private final Map<String, BenutzerId> ausstehend = new ConcurrentHashMap<>();
 
     @Inject
-    PasskeyService(BenutzerRepository benutzer, PasskeyRepository passkeys, PasskeyZeremonie zeremonie,
-                   Anmeldesitzung sitzung) {
-        this(benutzer, passkeys, zeremonie, sitzung, Clock.systemUTC());
+    PasskeyService(BenutzerRepository benutzer, PasskeyRepository passkeys,
+                   AusstehendeRegistrierungRepository ausstehende, PasskeyZeremonie zeremonie,
+                   Anmeldesitzung sitzung,
+                   @ConfigProperty(name = "trainingsapp.passkey.ausstehende-registrierung-ttl")
+                   Duration registrierungTtl) {
+        this(benutzer, passkeys, ausstehende, zeremonie, sitzung, registrierungTtl, Clock.systemUTC());
     }
 
-    public PasskeyService(BenutzerRepository benutzer, PasskeyRepository passkeys, PasskeyZeremonie zeremonie,
-                          Anmeldesitzung sitzung, Clock uhr) {
+    public PasskeyService(BenutzerRepository benutzer, PasskeyRepository passkeys,
+                          AusstehendeRegistrierungRepository ausstehende, PasskeyZeremonie zeremonie,
+                          Anmeldesitzung sitzung, Duration registrierungTtl, Clock uhr) {
+        if (registrierungTtl.isNegative() || registrierungTtl.isZero()) {
+            throw new IllegalArgumentException("TTL der ausstehenden Registrierung muss positiv sein");
+        }
         this.benutzer = benutzer;
         this.passkeys = passkeys;
+        this.ausstehende = ausstehende;
         this.zeremonie = zeremonie;
         this.sitzung = sitzung;
+        this.registrierungTtl = registrierungTtl;
         this.uhr = uhr;
     }
 
@@ -57,19 +70,26 @@ public class PasskeyService {
             throw new BenutzernameVergeben(benutzername);
         }
         // Die BenutzerId wird schon hier vergeben, damit der User-Handle des ersten Passkeys
-        // gleich dem aller weiteren ist. Spike: nur im Speicher, ohne Ablaufzeit.
-        BenutzerId vorgesehen = ausstehend.computeIfAbsent(benutzername,
-                n -> BenutzerId.neu());
-        return zeremonie.registrierungsOptionen(new Benutzer(vorgesehen, benutzername), List.of());
+        // gleich dem aller weiteren ist. Sie bleibt bis zum Abschluss, hoechstens bis zum Ablauf
+        // der TTL reserviert; ein erneuter Versuch innerhalb der TTL erhaelt dieselbe BenutzerId.
+        Instant jetzt = uhr.instant();
+        AusstehendeRegistrierung reserviert = ausstehende.reserviere(
+                new AusstehendeRegistrierung(BenutzerId.neu(), benutzername, jetzt.plus(registrierungTtl)), jetzt);
+        return zeremonie.registrierungsOptionen(new Benutzer(reserviert.vorgesehen(), benutzername), List.of());
     }
 
+    /**
+     * @throws PasskeyPruefungFehlgeschlagen bei ungueltiger Antwort oder ohne gueltige (nicht
+     *                                       abgelaufene) ausstehende Registrierung fuer den Namen
+     * @throws BenutzernameVergeben          wenn der Name inzwischen vergeben ist
+     */
     public BenutzerId registrierungAbschliessen(String benutzername, String antwortJson) {
+        Benutzername.pruefe(benutzername);
         PasskeyZeremonie.NeuerPasskey neu = zeremonie.registrierungPruefen(antwortJson);
-        BenutzerId vorgesehen = ausstehend.remove(benutzername);
-        if (vorgesehen == null) {
-            throw new PasskeyPruefungFehlgeschlagen("Keine laufende Registrierung fuer diesen Benutzernamen");
-        }
-        Benutzer angelegt = new Benutzer(vorgesehen, benutzername);
+        AusstehendeRegistrierung reserviert = ausstehende.entnimm(benutzername, uhr.instant())
+                .orElseThrow(() -> new PasskeyPruefungFehlgeschlagen(
+                        "Keine laufende oder eine abgelaufene Registrierung fuer diesen Benutzernamen"));
+        Benutzer angelegt = new Benutzer(reserviert.vorgesehen(), benutzername);
         if (!benutzer.legeAn(angelegt)) {
             throw new BenutzernameVergeben(benutzername);
         }

@@ -20,9 +20,16 @@ import io.restassured.http.ContentType;
 import io.vertx.core.json.JsonObject;
 import org.junit.jupiter.api.Test;
 
+import jakarta.inject.Inject;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import javax.sql.DataSource;
 
 /**
  * Akzeptanztest E3 gegen PostgreSQL (E23, Abnahme 1): Ein Benutzer registriert zwei Passkeys,
@@ -39,8 +46,11 @@ class PasskeyAkzeptanzTest {
     @TestHTTPResource
     URL url;
 
+    @Inject
+    DataSource dataSource;
+
     @Test
-    void zweiPasskeysRegistrierenAnmeldenListenLoeschenLetzterGesperrt() {
+    void zweiPasskeysRegistrierenAnmeldenListenLoeschenLetzterGesperrt() throws SQLException {
         WebAuthnHardware handy = new WebAuthnHardware(url);
         WebAuthnHardware laptop = new WebAuthnHardware(url);
 
@@ -99,6 +109,13 @@ class PasskeyAkzeptanzTest {
                 .then().statusCode(409).body("code", equalTo("LETZTER_PASSKEY"));
         given().filter(browserLaptop).get("/v1/passkeys").then().statusCode(200).body("$", hasSize(1));
         anmelden(laptop);
+
+        // 6. Beleg direkt aus PostgreSQL (an Hibernate vorbei): ein Benutzer mit genau dem
+        //    verbliebenen Passkey, keine ausstehende Registrierung mehr
+        assertEquals(List.of(laptopId), sql("""
+                SELECT p.credential_id FROM passkey p JOIN benutzer b ON b.id = p.benutzer_id
+                WHERE b.benutzername = 'anna'"""));
+        assertEquals(List.of(), sql("SELECT id FROM ausstehende_registrierung WHERE benutzername = 'anna'"));
     }
 
     @Test
@@ -160,6 +177,18 @@ class PasskeyAkzeptanzTest {
                 .post("/v1/anmelden")
                 .then().statusCode(204).cookie("quarkus-credential", notNullValue());
         return browser;
+    }
+
+    private List<String> sql(String abfrage) throws SQLException {
+        try (Connection verbindung = dataSource.getConnection();
+                PreparedStatement anweisung = verbindung.prepareStatement(abfrage);
+                ResultSet ergebnis = anweisung.executeQuery()) {
+            List<String> zeilen = new ArrayList<>();
+            while (ergebnis.next()) {
+                zeilen.add(ergebnis.getString(1));
+            }
+            return zeilen;
+        }
     }
 
     private String anmeldeChallenge(CookieFilter browser) {
