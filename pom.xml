@@ -97,6 +97,13 @@
             <artifactId>quarkus-test-security</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- E2E mit virtuellem Authenticator von Chromium (S-04, B4); Browser aus ~/.cache/ms-playwright -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>1.65.0</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Architekturregeln (E23, E26) -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
