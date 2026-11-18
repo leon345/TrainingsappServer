@@ -1,10 +1,13 @@
 package de.trainingsapp.api.v1;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import de.trainingsapp.infrastructure.persistenz.DatenbankErforderlich;
 import de.trainingsapp.infrastructure.persistenz.MitDatenbank;
+import de.trainingsapp.testhilfe.Ablauf;
+import de.trainingsapp.testhilfe.TestAuthenticator;
 import de.trainingsapp.testhilfe.TestOrigin;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -53,6 +56,30 @@ class RegistrierungRollbackTest {
                 + "(SELECT 1 FROM passkey p WHERE p.benutzer_id = b.id)"), "Benutzer ohne Passkey");
         assertEquals(1, zaehle("SELECT count(*) FROM ausstehende_registrierung WHERE benutzername = 'rolf-zwei'"),
                 "Reservierung durch Rollback wiederhergestellt");
+    }
+
+    /**
+     * E26: Passkey hinzufuegen in einer Transaktion (Nummer fuer "Passkey n" vergeben, Passkey speichern).
+     * Scheitert das Speichern (Credential-ID gehoert schon einem anderen Benutzer), wird auch die
+     * vergebene Nummer zurueckgerollt: Der naechste Passkey heisst "Passkey 2", nicht "Passkey 3".
+     */
+    @Test
+    void rollbackBeimHinzufuegenGibtDieNummerFreiUndSpeichertNichts() throws SQLException {
+        TestAuthenticator fremd = new TestAuthenticator(url);
+        Ablauf.registrieren("rolf-drei", fremd);
+        CookieFilter browser = Ablauf.registrieren("rolf-vier", new TestAuthenticator(url));
+
+        // Dasselbe Geraet (gleiche Credential-ID) noch einmal hinzufuegen: 400, nichts gespeichert
+        Ablauf.im(browser).contentType(ContentType.JSON)
+                .body(fremd.registriere(Ablauf.hinzufuegenOptionen(browser)).encode())
+                .post("/v1/passkeys").then().statusCode(400);
+        assertEquals(1, zaehle("SELECT count(*) FROM passkey p JOIN benutzer b ON b.id = p.benutzer_id "
+                + "WHERE b.benutzername = 'rolf-vier'"));
+
+        Ablauf.hinzufuegen(browser, new TestAuthenticator(url));
+        Ablauf.im(browser).get("/v1/passkeys").then().statusCode(200)
+                .body("bezeichnung", containsInAnyOrder("Passkey 1", "Passkey 2"));
+        assertEquals(2, zaehle("SELECT letzte_passkey_nummer FROM benutzer WHERE benutzername = 'rolf-vier'"));
     }
 
     private int registrieren(String name, WebAuthnHardware geraet) {
