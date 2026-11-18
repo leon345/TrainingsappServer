@@ -51,6 +51,11 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-openapi</artifactId>
         </dependency>
+        <!-- S-04-Spike: Passkeys (WebAuthn, intern webauthn4j) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-security-webauthn</artifactId>
+        </dependency>
 
         <!-- Persistenz (E9): PostgreSQL, Hibernate ORM mit Panache (Repository-Muster), Flyway -->
         <dependency>
@@ -78,6 +83,32 @@
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Software-Authenticator (WebAuthnHardware) fuer Tests -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-test-security-webauthn</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- @TestSecurity fuer Endpunkte ohne Passkey-Bezug -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-test-security</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- E2E mit virtuellem Authenticator von Chromium (S-04, B4); Browser aus ~/.cache/ms-playwright -->
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>1.65.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Architekturregeln (E23, E26) -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.5.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

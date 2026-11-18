@@ -18,7 +18,7 @@ class TimerEinstellungServiceCdiTest {
 
     @Test
     void serviceIstMitAdapterVerdrahtet() {
-        BenutzerId benutzer = new BenutzerId("cdi-test");
+        BenutzerId benutzer = BenutzerId.neu();
         service.speichere(benutzer, 30, 10);
         assertEquals(30, service.lese(benutzer).orElseThrow().trainingSekunden());
     }

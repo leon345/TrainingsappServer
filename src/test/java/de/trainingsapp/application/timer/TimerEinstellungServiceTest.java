@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
 
 class TimerEinstellungServiceTest {
 
-    private static final BenutzerId ANNA = new BenutzerId("anna");
-    private static final BenutzerId BEN = new BenutzerId("ben");
+    private static final BenutzerId ANNA = BenutzerId.aus("00000000-0000-4000-8000-00000000a001");
+    private static final BenutzerId BEN = BenutzerId.aus("00000000-0000-4000-8000-00000000b002");
 
     private TimerEinstellungService service;
 
