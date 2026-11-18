@@ -25,16 +25,30 @@ PostgreSQL, Hibernate ORM mit Panache im Repository-Muster, Schema ausschliessli
 
 | Migration | Tabelle | Inhalt |
 |---|---|---|
-| V2 | `benutzer` | `BenutzerId` (UUID, zugleich WebAuthn-User-Handle) und Benutzername (Pseudonym, eindeutig ohne Gross-/Kleinschreibung) |
-| V2 | `passkey` | Passkeys je Benutzer: Credential-ID (eindeutig), oeffentlicher Schluessel, Algorithmus, Signaturzaehler; `ON DELETE CASCADE` am Benutzer |
-| V3 | `ausstehende_registrierung` | Fuer einen Benutzernamen vorgesehene `BenutzerId` zwischen Registrierungsoptionen und Abschluss, mit Ablaufzeit `gueltig_bis` (TTL `trainingsapp.passkey.ausstehende-registrierung-ttl`, Standard 10 min) |
+| V2 | `benutzer` | `BenutzerId` (UUID, zugleich WebAuthn-User-Handle), Benutzername (Pseudonym, nur Kleinschreibung, UNIQUE und CHECK mit der Regex aus E28), `letzte_passkey_nummer` fuer "Passkey n" (E29) |
+| V2 | `passkey` | Passkeys je Benutzer: Credential-ID (UNIQUE), `bezeichnung` (1 bis 50 Zeichen), oeffentlicher Schluessel, Algorithmus, Signaturzaehler, `erstellt_am` und `zuletzt_verwendet_am` als Tag (`date`, UTC); kein AAGUID, keine IP, kein User-Agent (E29); `ON DELETE CASCADE` am Benutzer |
+| V3 | `ausstehende_registrierung` | Fuer einen Benutzernamen vorgesehene `BenutzerId` zwischen Registrierungsoptionen und Abschluss, gebunden an die ausgegebene Challenge, mit Ablaufzeit `gueltig_bis` (TTL `trainingsapp.passkey.ausstehende-registrierung-ttl`, Standard 10 min) |
+| V3 | `verbrauchte_challenge` | SHA-256 verbrauchter WebAuthn-Challenges (jede Challenge einmal verwendbar), mit `gueltig_bis` |
+
+V2 und V3 duerfen nur bis zum ersten Merge nach `integration/server` geaendert werden (Council, E28/E29);
+danach gilt die Regel unten (angewendete Migrationen werden nie geaendert).
 
 Ports und Adapter: `domain.benutzer.BenutzerRepository` -> `infrastructure.benutzer.PanacheBenutzerRepository`,
 `domain.benutzer.AusstehendeRegistrierungRepository` -> `infrastructure.benutzer.PanacheAusstehendeRegistrierungRepository`,
 `domain.passkey.PasskeyRepository` -> `infrastructure.passkey.PanachePasskeyRepository`.
-Die Application-Schicht kennt keine Transaktionen; jede Adapter-Methode laeuft in einer eigenen Transaktion.
+
+Transaktionen (E26): Die Use-Cases oeffnen sie ueber den Port `application.Transaktion`
+(`infrastructure.persistenz.QuarkusTransaktion`, `QuarkusTransaction.joiningExisting()`); `application`
+kennt kein `jakarta.transaction` (ArchUnit-Regel). Schreibmethoden der Adapter tragen
+`@Transactional(MANDATORY)` und scheitern ohne laufende Transaktion; Lesemethoden oeffnen bei Bedarf eine
+eigene. Externe Aufrufe (WebAuthn-Pruefung, Challenge-Verbrauch, Sitzung, Rate-Limit) liegen nie in der
+Transaktion. Fuer Unit-Tests gibt es den Fake `application.DirekteTransaktion` (Testquellen).
 Konflikte (Name vergeben, Credential-ID doppelt) loesen die Adapter mit `INSERT ... ON CONFLICT DO NOTHING`,
 die Loeschsperre fuer den letzten Passkey mit einer Zeilensperre auf den Benutzer (`SELECT ... FOR UPDATE`).
+
+Hinweis fuer S-02b: `TimerEinstellungService` und `InMemoryIntervallEinstellungRepository` (S-02a) kennen
+den Port `Transaktion` noch nicht. Ein JPA-Adapter fuer die Timer-Einstellung muss dem Muster folgen
+(`MANDATORY` an den Schreibmethoden, Service ruft `Transaktion.ausfuehren`).
 
 ## Konventionen
 
@@ -44,7 +58,7 @@ die Loeschsperre fuer den letzten Passkey mit einer Zeilensperre auf den Benutze
   `CamelCaseToUnderscoresNamingStrategy` (`startZeit` -> `start_zeit`).
 - Primaerschluessel: Spalte `id` vom Typ `uuid`. Die Anwendung vergibt die ID beim Erzeugen des
   Domain-Objekts (kein Datenbank-Generator).
-- Zeitpunkte: `timestamp with time zone`, JDBC-Zeitzone UTC.
+- Zeitpunkte: `timestamp with time zone`, JDBC-Zeitzone UTC. Reine Tagesangaben (z. B. `passkey.erstellt_am`) als `date` in UTC.
 - Hibernate erzeugt kein Schema (`schema-management.strategy=validate`).
 
 ## Profile und Zugangsdaten
