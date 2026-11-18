@@ -93,7 +93,12 @@ public class PasskeyService {
         Instant jetzt = uhr.instant();
         AusstehendeRegistrierung reserviert = transaktion.ausfuehren(() -> ausstehende.reserviere(
                 new AusstehendeRegistrierung(BenutzerId.neu(), benutzername, jetzt.plus(registrierungTtl)), jetzt));
-        return zeremonie.registrierungsOptionen(new Benutzer(reserviert.vorgesehen(), benutzername), List.of());
+        // E26: Optionen (externer Aufruf) ausserhalb jeder Transaktion
+        PasskeyZeremonie.Optionen optionen =
+                zeremonie.registrierungsOptionen(new Benutzer(reserviert.vorgesehen(), benutzername), List.of());
+        // B1: Der Abschluss gelingt nur mit einer Antwort auf genau diese Challenge (Name an Start gebunden)
+        transaktion.ausfuehren(() -> ausstehende.bindeChallenge(reserviert.vorgesehen(), optionen.challenge()));
+        return optionen.json();
     }
 
     /**
@@ -109,9 +114,9 @@ public class PasskeyService {
         // E26: Reservierung lesen und loeschen, Benutzer anlegen und Passkey speichern gemeinsam;
         // scheitert ein Schritt, bleibt weder ein Benutzer ohne Passkey noch eine verbrauchte Reservierung.
         BenutzerId angelegt = transaktion.ausfuehren(() -> {
-            AusstehendeRegistrierung reserviert = ausstehende.entnimm(benutzername, jetzt)
+            AusstehendeRegistrierung reserviert = ausstehende.entnimm(benutzername, neu.challenge(), jetzt)
                     .orElseThrow(() -> new PasskeyPruefungFehlgeschlagen(
-                            "Keine laufende oder eine abgelaufene Registrierung fuer diesen Benutzernamen"));
+                            "Keine zu dieser Challenge passende, gueltige Registrierung fuer diesen Benutzernamen"));
             Benutzer neuerBenutzer = new Benutzer(reserviert.vorgesehen(), benutzername);
             if (!benutzer.legeAn(neuerBenutzer)) {
                 throw new BenutzernameVergeben(benutzername.wert());
@@ -143,7 +148,7 @@ public class PasskeyService {
         Benutzer b = benutzer.findeNachId(angemeldet)
                 .orElseThrow(() -> new IllegalStateException("Angemeldeter Benutzer unbekannt: " + angemeldet));
         List<PasskeyId> vorhandene = passkeys.findeFuer(angemeldet).stream().map(Passkey::id).toList();
-        return zeremonie.registrierungsOptionen(b, vorhandene);
+        return zeremonie.registrierungsOptionen(b, vorhandene).json();
     }
 
     public Passkey weiterenPasskeyAbschliessen(BenutzerId angemeldet, String antwortJson) {

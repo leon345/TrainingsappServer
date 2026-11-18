@@ -21,7 +21,11 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.List;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Adapter der Ports {@link PasskeyZeremonie} und {@link Anmeldesitzung} auf die
@@ -36,15 +40,23 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
     private final WebAuthnSecurity security;
     private final CurrentVertxRequest request;
     private final PasskeyRepository passkeys;
+    private final VerbrauchteChallenges verbraucht;
+    private final String challengeCookie;
 
-    QuarkusWebAuthnZeremonie(WebAuthnSecurity security, CurrentVertxRequest request, PasskeyRepository passkeys) {
+    QuarkusWebAuthnZeremonie(WebAuthnSecurity security, CurrentVertxRequest request, PasskeyRepository passkeys,
+                             VerbrauchteChallenges verbraucht,
+                             @ConfigProperty(name = "quarkus.webauthn.challenge-cookie-name",
+                                     defaultValue = "_quarkus_webauthn_challenge") String challengeCookie) {
         this.security = security;
         this.request = request;
         this.passkeys = passkeys;
+        this.verbraucht = verbraucht;
+        this.challengeCookie = challengeCookie;
     }
 
     @Override
-    public String registrierungsOptionen(Benutzer benutzer, List<PasskeyId> vorhandene) {
+    public Optionen registrierungsOptionen(Benutzer benutzer, List<PasskeyId> vorhandene) {
+        neueChallengeErzwingen();
         PublicKeyCredentialCreationOptions o = security
                 .getRegisterChallenge(benutzer.benutzername().wert(), benutzer.benutzername().wert(), ctx())
                 .await().indefinitely();
@@ -65,7 +77,7 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
                 o.getAuthenticatorSelection(),
                 o.getAttestation(),
                 o.getExtensions());
-        return security.toJsonString(angepasst);
+        return new Optionen(security.toJsonString(angepasst), Base64UrlUtil.encodeToString(o.getChallenge().getValue()));
     }
 
     @Override
@@ -78,13 +90,16 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
         } catch (RuntimeException e) {
             throw new PasskeyPruefungFehlgeschlagen("Registrierung abgelehnt", e);
         }
+        String challenge = challengeAus(antwortJson);
+        verbrauche(challenge);
         WebAuthnCredentialRecord.RequiredPersistedData d = record.getRequiredPersistedData();
         return new NeuerPasskey(new PasskeyId(d.credentialId()), d.publicKey(),
-                d.publicKeyAlgorithm(), d.counter());
+                d.publicKeyAlgorithm(), d.counter(), challenge);
     }
 
     @Override
     public String anmeldeOptionen() {
+        neueChallengeErzwingen();
         return security.toJsonString(security.getLoginChallenge(null, ctx()).await().indefinitely());
     }
 
@@ -96,9 +111,15 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
         } catch (RuntimeException e) {
             throw new PasskeyPruefungFehlgeschlagen("Anmeldung abgelehnt", e);
         }
+        // Die Signatur (samt Origin, rpId, UV, Zaehler) ist geprueft: Challenge sofort verbrauchen,
+        // damit dieselbe Antwort nicht erneut eingereicht werden kann.
+        verbrauche(challengeAus(antwortJson));
         PasskeyId id = new PasskeyId(record.getCredentialID());
         Passkey gespeichert = passkeys.findeNachId(id)
                 .orElseThrow(() -> new PasskeyPruefungFehlgeschlagen("Passkey unbekannt"));
+        // WebAuthn L3, 7.2 Schritt 6: Ohne allowCredentials (discoverable) muss der User-Handle
+        // vorhanden sein und zum Besitzer des Passkeys gehoeren. Die Extension prueft das nicht.
+        pruefeUserHandle(antwortJson, gespeichert);
         return gespeichert.mitZaehler(record.getCounter());
     }
 
@@ -110,6 +131,49 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
     @Override
     public void beende() {
         security.logout(ctx());
+    }
+
+    /**
+     * Die Extension uebernimmt eine Challenge aus einem mitgeschickten Challenge-Cookie, statt eine neue
+     * zu erzeugen. Damit jede Zeremonie eine eigene, einmal verwendbare Challenge bekommt, wird das
+     * eingehende Cookie vor dem Aufruf aus dem Request entfernt (ohne Set-Cookie zu erzeugen).
+     */
+    private void neueChallengeErzwingen() {
+        ctx().response().removeCookie(challengeCookie, false);
+    }
+
+    private void verbrauche(String challenge) {
+        if (!verbraucht.verbrauche(challenge)) {
+            throw new PasskeyPruefungFehlgeschlagen("Challenge wurde bereits verwendet");
+        }
+    }
+
+    private static void pruefeUserHandle(String antwortJson, Passkey gespeichert) {
+        String handle = parse(antwortJson).getJsonObject("response").getString("userHandle");
+        if (handle == null || handle.isEmpty()) {
+            throw new PasskeyPruefungFehlgeschlagen("User-Handle fehlt");
+        }
+        byte[] erwartet = UserHandle.zuBytes(gespeichert.benutzerId());
+        byte[] geliefert;
+        try {
+            geliefert = Base64.getUrlDecoder().decode(handle);
+        } catch (IllegalArgumentException e) {
+            throw new PasskeyPruefungFehlgeschlagen("User-Handle ungueltig", e);
+        }
+        if (!MessageDigest.isEqual(erwartet, geliefert)) {
+            throw new PasskeyPruefungFehlgeschlagen("User-Handle passt nicht zum Besitzer des Passkeys");
+        }
+    }
+
+    /** Challenge aus clientDataJSON; nach erfolgreicher Pruefung ist sie gleich der Challenge im Cookie. */
+    private static String challengeAus(String antwortJson) {
+        try {
+            String clientData = parse(antwortJson).getJsonObject("response").getString("clientDataJSON");
+            return new JsonObject(new String(Base64.getUrlDecoder().decode(clientData), StandardCharsets.UTF_8))
+                    .getString("challenge");
+        } catch (RuntimeException e) {
+            throw new PasskeyPruefungFehlgeschlagen("clientDataJSON ungueltig", e);
+        }
     }
 
     private RoutingContext ctx() {

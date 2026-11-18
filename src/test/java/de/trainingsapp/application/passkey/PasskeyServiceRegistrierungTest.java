@@ -111,6 +111,17 @@ class PasskeyServiceRegistrierungTest {
         assertEquals(List.of(), gestarteteSitzungen);
     }
 
+    /** B1: Ein Abschluss mit einem anderen Namen als beim Start scheitert, die fremde Reservierung bleibt. */
+    @Test
+    void abschlussMitAnderemNamenAlsBeimStartScheitert() {
+        service.registrierungStarten("berta");          // fremder, laufender Ablauf
+        service.registrierungStarten("anna");           // eigener Ablauf, letzte Challenge gehoert "anna"
+
+        assertThrows(PasskeyPruefungFehlgeschlagen.class, () -> service.registrierungAbschliessen("berta", "{}"));
+        assertEquals(Optional.empty(), benutzer.findeNachName(new Benutzername("berta")));
+        assertTrue(ausstehende.eintraege.containsKey(new Benutzername("berta")), "fremde Reservierung bleibt");
+    }
+
     @Test
     void abschlussOhneStartWirdAbgelehnt() {
         assertThrows(PasskeyPruefungFehlgeschlagen.class, () -> service.registrierungAbschliessen("anna", "{}"));
@@ -234,9 +245,21 @@ class PasskeyServiceRegistrierungTest {
             return eintraege.computeIfAbsent(neu.benutzername(), k -> neu);
         }
 
+        final Map<BenutzerId, String> challenges = new HashMap<>();
+
         @Override
-        public Optional<AusstehendeRegistrierung> entnimm(Benutzername name, Instant jetzt) {
-            return Optional.ofNullable(eintraege.remove(name)).filter(r -> r.istGueltigUm(jetzt));
+        public void bindeChallenge(BenutzerId vorgesehen, String challenge) {
+            challenges.put(vorgesehen, challenge);
+        }
+
+        @Override
+        public Optional<AusstehendeRegistrierung> entnimm(Benutzername name, String challenge, Instant jetzt) {
+            AusstehendeRegistrierung r = eintraege.get(name);
+            if (r == null || !challenge.equals(challenges.get(r.vorgesehen()))) {
+                return Optional.empty();
+            }
+            eintraege.remove(name);
+            return Optional.of(r).filter(x -> x.istGueltigUm(jetzt));
         }
     }
 
@@ -277,16 +300,20 @@ class PasskeyServiceRegistrierungTest {
 
     private static final class Zeremonie implements PasskeyZeremonie {
         Benutzer letzterBenutzer;
+        String letzteChallenge;
 
         @Override
-        public String registrierungsOptionen(Benutzer b, List<PasskeyId> vorhandene) {
+        public Optionen registrierungsOptionen(Benutzer b, List<PasskeyId> vorhandene) {
             letzterBenutzer = b;
-            return "{}";
+            letzteChallenge = UUID.randomUUID().toString();
+            return new Optionen("{}", letzteChallenge);
         }
 
+        /** Antwortet auf die zuletzt ausgegebene Challenge (wie ein Browser im selben Ablauf). */
         @Override
         public NeuerPasskey registrierungPruefen(String antwortJson) {
-            return new NeuerPasskey(new PasskeyId(UUID.randomUUID().toString()), new byte[] {1}, -7, 0);
+            return new NeuerPasskey(new PasskeyId(UUID.randomUUID().toString()), new byte[] {1}, -7, 0,
+                    String.valueOf(letzteChallenge));
         }
 
         @Override

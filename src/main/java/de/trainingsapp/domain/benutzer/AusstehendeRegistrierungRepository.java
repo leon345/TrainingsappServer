@@ -19,9 +19,16 @@ public interface AusstehendeRegistrierungRepository {
     AusstehendeRegistrierung reserviere(AusstehendeRegistrierung neu, Instant jetzt);
 
     /**
-     * Entfernt die Reservierung fuer den Benutzernamen und gibt sie zurueck, sofern sie um
-     * {@code jetzt} noch gueltig ist. Eine abgelaufene Reservierung wird ebenfalls entfernt,
-     * aber nicht zurueckgegeben. Hoechstens ein Aufrufer erhaelt dieselbe Reservierung.
+     * Haelt die fuer diese Reservierung ausgegebene Challenge fest; eine fruehere wird ersetzt.
+     * Nur Antworten auf diese Challenge koennen die Registrierung abschliessen.
      */
-    Optional<AusstehendeRegistrierung> entnimm(Benutzername benutzername, Instant jetzt);
+    void bindeChallenge(BenutzerId vorgesehen, String challenge);
+
+    /**
+     * Entfernt die Reservierung fuer den Benutzernamen und gibt sie zurueck, sofern sie an
+     * {@code challenge} gebunden und um {@code jetzt} noch gueltig ist. Passt die Challenge nicht,
+     * bleibt die Reservierung unveraendert (sie gehoert einem anderen Ablauf). Eine abgelaufene
+     * Reservierung wird entfernt, aber nicht zurueckgegeben. Hoechstens ein Aufrufer erhaelt sie.
+     */
+    Optional<AusstehendeRegistrierung> entnimm(Benutzername benutzername, String challenge, Instant jetzt);
 }

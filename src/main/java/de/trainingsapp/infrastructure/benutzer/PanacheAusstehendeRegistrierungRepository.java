@@ -2,6 +2,7 @@ package de.trainingsapp.infrastructure.benutzer;
 
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
+import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.Benutzername;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,13 +45,25 @@ public class PanacheAusstehendeRegistrierungRepository
 
     @Override
     @Transactional(TxType.MANDATORY)
-    public Optional<AusstehendeRegistrierung> entnimm(Benutzername benutzername, Instant jetzt) {
+    public void bindeChallenge(BenutzerId vorgesehen, String challenge) {
+        Objects.requireNonNull(vorgesehen, "vorgesehen");
+        Objects.requireNonNull(challenge, "challenge");
+        update("challenge = ?1 where id = ?2", challenge, vorgesehen.wert());
+    }
+
+    @Override
+    @Transactional(TxType.MANDATORY)
+    public Optional<AusstehendeRegistrierung> entnimm(Benutzername benutzername, String challenge, Instant jetzt) {
         Objects.requireNonNull(benutzername, "benutzername");
+        Objects.requireNonNull(challenge, "challenge");
         Objects.requireNonNull(jetzt, "jetzt");
         Optional<AusstehendeRegistrierungEntity> vorhanden = find("benutzername", benutzername.wert())
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional();
-        vorhanden.ifPresent(this::delete);
+        if (vorhanden.isEmpty() || !challenge.equals(vorhanden.get().challenge)) {
+            return Optional.empty();
+        }
+        delete(vorhanden.get());
         return vorhanden.map(AusstehendeRegistrierungMapper::zuDomain).filter(r -> r.istGueltigUm(jetzt));
     }
 }

@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 class PanacheAusstehendeRegistrierungRepositoryTest {
 
     private static final Duration TTL = Duration.ofMinutes(10);
+    private static final String CH = "challenge-1";
 
     @Inject
     AusstehendeRegistrierungRepository repository;
@@ -53,11 +54,12 @@ class PanacheAusstehendeRegistrierungRepositoryTest {
         AusstehendeRegistrierung neu = neu("Jule", jetzt);
 
         assertEquals(neu, transaktion.ausfuehren(() -> repository.reserviere(neu, jetzt)));
+        transaktion.ausfuehren(() -> repository.bindeChallenge(neu.vorgesehen(), CH));
         assertEquals(1, zeilenFuer(neu.benutzername()));
 
-        assertEquals(Optional.of(neu), transaktion.ausfuehren(() -> repository.entnimm(neu.benutzername(), jetzt.plusSeconds(1))));
+        assertEquals(Optional.of(neu), transaktion.ausfuehren(() -> repository.entnimm(neu.benutzername(), CH, jetzt.plusSeconds(1))));
         assertEquals(0, zeilenFuer(neu.benutzername()));
-        assertEquals(Optional.empty(), transaktion.ausfuehren(() -> repository.entnimm(neu.benutzername(), jetzt.plusSeconds(1))));
+        assertEquals(Optional.empty(), transaktion.ausfuehren(() -> repository.entnimm(neu.benutzername(), CH, jetzt.plusSeconds(1))));
     }
 
     @Test
@@ -65,13 +67,14 @@ class PanacheAusstehendeRegistrierungRepositoryTest {
         Instant jetzt = Instant.parse("2100-01-01T10:00:00Z");
         AusstehendeRegistrierung erste = neu("Kai", jetzt);
         transaktion.ausfuehren(() -> repository.reserviere(erste, jetzt));
+        transaktion.ausfuehren(() -> repository.bindeChallenge(erste.vorgesehen(), CH));
 
         AusstehendeRegistrierung zweiterVersuch = new AusstehendeRegistrierung(BenutzerId.neu(),
                 erste.benutzername(), jetzt.plus(Duration.ofMinutes(9)).plus(TTL));
         AusstehendeRegistrierung wirksam = transaktion.ausfuehren(() -> repository.reserviere(zweiterVersuch, jetzt.plus(Duration.ofMinutes(9))));
 
         assertEquals(erste, wirksam, "gleiche BenutzerId (User-Handle) und unveraenderte Ablaufzeit");
-        assertEquals(Optional.of(erste), transaktion.ausfuehren(() -> repository.entnimm(erste.benutzername(), jetzt.plusSeconds(1))));
+        assertEquals(Optional.of(erste), transaktion.ausfuehren(() -> repository.entnimm(erste.benutzername(), CH, jetzt.plusSeconds(1))));
     }
 
     @Test
@@ -94,8 +97,9 @@ class PanacheAusstehendeRegistrierungRepositoryTest {
         Instant jetzt = Instant.parse("2100-01-01T10:00:00Z");
         AusstehendeRegistrierung r = neu("Mia", jetzt);
         transaktion.ausfuehren(() -> repository.reserviere(r, jetzt));
+        transaktion.ausfuehren(() -> repository.bindeChallenge(r.vorgesehen(), CH));
 
-        assertEquals(Optional.empty(), transaktion.ausfuehren(() -> repository.entnimm(r.benutzername(), r.gueltigBis())));
+        assertEquals(Optional.empty(), transaktion.ausfuehren(() -> repository.entnimm(r.benutzername(), CH, r.gueltigBis())));
         assertEquals(0, zeilenFuer(r.benutzername()));
     }
 
@@ -110,6 +114,26 @@ class PanacheAusstehendeRegistrierungRepositoryTest {
         transaktion.ausfuehren(() -> repository.reserviere(neu("Ole", spaeter), spaeter));
 
         assertEquals(0, zeilenFuer(verwaist.benutzername()));
+    }
+
+    /** B1: Nur die gebundene Challenge schliesst ab; eine andere laesst die Reservierung unveraendert. */
+    @Test
+    void entnehmenNurMitDerGebundenenChallenge() throws SQLException {
+        Instant jetzt = Instant.parse("2100-01-01T10:00:00Z");
+        AusstehendeRegistrierung r = neu("Pia", jetzt);
+        transaktion.ausfuehren(() -> repository.reserviere(r, jetzt));
+
+        assertEquals(Optional.empty(), transaktion.ausfuehren(() -> repository.entnimm(r.benutzername(), CH, jetzt)),
+                "ohne gebundene Challenge");
+        transaktion.ausfuehren(() -> repository.bindeChallenge(r.vorgesehen(), CH));
+        assertEquals(Optional.empty(),
+                transaktion.ausfuehren(() -> repository.entnimm(r.benutzername(), "andere", jetzt)));
+        assertEquals(1, zeilenFuer(r.benutzername()), "Reservierung bleibt bei falscher Challenge");
+
+        transaktion.ausfuehren(() -> repository.bindeChallenge(r.vorgesehen(), "neuere"));
+        assertEquals(Optional.empty(), transaktion.ausfuehren(() -> repository.entnimm(r.benutzername(), CH, jetzt)),
+                "fruehere Challenge ist ersetzt");
+        assertEquals(Optional.of(r), transaktion.ausfuehren(() -> repository.entnimm(r.benutzername(), "neuere", jetzt)));
     }
 
     private static AusstehendeRegistrierung neu(String praefix, Instant jetzt) {

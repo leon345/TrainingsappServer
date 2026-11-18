@@ -20,4 +20,7 @@ public class AusstehendeRegistrierungEntity {
 
     @Column(nullable = false)
     public Instant gueltigBis;
+
+    @Column(length = 128)
+    public String challenge;
 }
