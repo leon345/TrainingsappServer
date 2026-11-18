@@ -21,6 +21,12 @@ public record IntervallEinstellung(Duration training, Duration pause) {
     public static final Duration MIN_PAUSE = Duration.ZERO;
     public static final Duration MAX_DAUER = Duration.ofHours(24);
 
+    /**
+     * Standard laut Entscheidung E20: Training 30 s, Pause 10 s. Wird geliefert,
+     * solange der Benutzer keine eigene Einstellung gespeichert hat.
+     */
+    public static final IntervallEinstellung STANDARD = ausSekunden(30, 10);
+
     public IntervallEinstellung {
         Objects.requireNonNull(training, "training");
         Objects.requireNonNull(pause, "pause");

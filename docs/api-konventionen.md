@@ -73,10 +73,26 @@ gibt es bereits (S-02a).
 |---|---|---|---|---|---|
 | `trainingSekunden` | integer (int32) | ja | 1 | 86400 | Dauer der Trainingsphase in Sekunden |
 | `pauseSekunden` | integer (int32) | ja | 0 | 86400 | Dauer der Pause in Sekunden (0 = keine Pause) |
+| `gespeichert` | boolean, `readOnly` | nur Antwort | – | – | `true`: vom Benutzer gespeicherte Einstellung; `false`: Standardwert |
 
 Grenzen entsprechen `domain.timer.IntervallEinstellung` (`MIN_TRAINING`, `MIN_PAUSE`, `MAX_DAUER`).
+
+Standard und Feld `gespeichert` (Entscheidung E20):
+
+- Standard ist `domain.timer.IntervallEinstellung.STANDARD`: `trainingSekunden` = 30,
+  `pauseSekunden` = 10.
+- `GET` ohne gespeicherte Einstellung liefert **200** mit dem Standard und `gespeichert: false`
+  (kein 404). Der Standard wird dabei nicht gespeichert.
+- `GET` mit gespeicherter Einstellung liefert diese mit `gespeichert: true`, auch wenn die Werte
+  dem Standard entsprechen.
+- `gespeichert` ist `readOnly` (`@Schema(readOnly = true)`): nur in der Antwort; ein im
+  `PUT`-Body mitgesendetes `gespeichert` wird ignoriert (kein Fehler). Die Antwort auf `PUT`
+  enthaelt `gespeichert: true`.
+
 Zuordnung im Code: `api.v1` (S-02b) -> `application.timer.TimerEinstellungService`
-(`lese`/`speichere`, Benutzer als `domain.benutzer.BenutzerId`) -> Port
+(`leseOderStandard` liefert `TimerEinstellungAnsicht(einstellung, gespeichert)` fuer `GET`;
+`speichere` fuer `PUT`; `lese` liefert nur die gespeicherte Einstellung als `Optional`;
+Benutzer als `domain.benutzer.BenutzerId`) -> Port
 `domain.timer.IntervallEinstellungRepository`, derzeit umgesetzt durch
 `infrastructure.timer.InMemoryIntervallEinstellungRepository` (`@DefaultBean`, Daten nur im
 Arbeitsspeicher; wird durch den Datenbank-Adapter aus S-12 ersetzt).

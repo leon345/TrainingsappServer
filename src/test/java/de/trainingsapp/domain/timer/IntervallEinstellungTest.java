@@ -26,6 +26,14 @@ class IntervallEinstellungTest {
     }
 
     @Test
+    void standardIstTraining30UndPause10Sekunden() {
+        // Entscheidung E20
+        assertEquals(30, IntervallEinstellung.STANDARD.trainingSekunden());
+        assertEquals(10, IntervallEinstellung.STANDARD.pauseSekunden());
+        assertEquals(IntervallEinstellung.ausSekunden(30, 10), IntervallEinstellung.STANDARD);
+    }
+
+    @Test
     void pauseNullIstErlaubt() {
         assertEquals(0, IntervallEinstellung.ausSekunden(30, 0).pauseSekunden());
     }

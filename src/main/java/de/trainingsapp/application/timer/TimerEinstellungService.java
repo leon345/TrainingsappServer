@@ -32,7 +32,21 @@ public class TimerEinstellungService {
     }
 
     /**
+     * Liest die wirksame Einstellung des Benutzers (E20): die gespeicherte
+     * ({@code gespeichert = true}) oder, falls keine existiert, den Standard
+     * {@link IntervallEinstellung#STANDARD} ({@code gespeichert = false}).
+     * Der Standard wird dabei nicht gespeichert.
+     */
+    public TimerEinstellungAnsicht leseOderStandard(BenutzerId benutzer) {
+        return lese(benutzer)
+                .map(TimerEinstellungAnsicht::gespeichert)
+                .orElseGet(TimerEinstellungAnsicht::standard);
+    }
+
+    /**
      * Speichert die Einstellung des Benutzers (anlegen oder ersetzen).
+     * Ein vom Client mitgesendetes {@code gespeichert} ist hier bewusst kein
+     * Parameter: Es ist {@code readOnly} und wird bei {@code PUT} ignoriert (E20).
      *
      * @throws UngueltigeIntervallEinstellungException bei Werten ausserhalb der Domain-Regeln
      */
