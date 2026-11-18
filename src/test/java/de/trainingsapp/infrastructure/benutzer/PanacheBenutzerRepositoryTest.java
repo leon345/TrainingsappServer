@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.trainingsapp.application.Transaktion;
 import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
@@ -38,6 +39,9 @@ class PanacheBenutzerRepositoryTest {
     @Inject
     DataSource dataSource;
 
+    @Inject
+    Transaktion transaktion;
+
     @Test
     void portWirdVomDatenbankAdapterUmgesetzt() {
         // Kein In-Memory-Adapter mehr: der Port wird ausschliesslich von der Datenbank umgesetzt.
@@ -48,7 +52,7 @@ class PanacheBenutzerRepositoryTest {
     void anlegenUndLesenNachIdUndName() {
         Benutzer benutzer = new Benutzer(BenutzerId.neu(), eindeutig("greta"));
 
-        assertTrue(repository.legeAn(benutzer));
+        assertTrue(transaktion.ausfuehren(() -> repository.legeAn(benutzer)));
 
         assertEquals(Optional.of(benutzer), repository.findeNachId(benutzer.id()));
         assertEquals(Optional.of(benutzer), repository.findeNachName(benutzer.benutzername()));
@@ -60,17 +64,25 @@ class PanacheBenutzerRepositoryTest {
     void nameIstEindeutig() {
         Benutzername name = eindeutig("hanna");
         Benutzer erster = new Benutzer(BenutzerId.neu(), name);
-        assertTrue(repository.legeAn(erster));
+        assertTrue(transaktion.ausfuehren(() -> repository.legeAn(erster)));
 
-        assertFalse(repository.legeAn(new Benutzer(BenutzerId.neu(), name)));
+        assertFalse(transaktion.ausfuehren(() -> repository.legeAn(new Benutzer(BenutzerId.neu(), name))));
         assertEquals(Optional.of(erster), repository.findeNachName(name));
     }
 
     @Test
     void gleicheIdWirdNichtZweimalAngelegt() {
         BenutzerId id = BenutzerId.neu();
-        assertTrue(repository.legeAn(new Benutzer(id, eindeutig("ida"))));
-        assertFalse(repository.legeAn(new Benutzer(id, eindeutig("ida"))));
+        assertTrue(transaktion.ausfuehren(() -> repository.legeAn(new Benutzer(id, eindeutig("ida")))));
+        assertFalse(transaktion.ausfuehren(() -> repository.legeAn(new Benutzer(id, eindeutig("ida")))));
+    }
+
+    @Test
+    void schreibenOhneTransaktionWirdAbgelehnt() {
+        // E26: Schreibmethoden tragen @Transactional(MANDATORY)
+        Benutzer benutzer = new Benutzer(BenutzerId.neu(), eindeutig("ohne"));
+        assertThrows(jakarta.transaction.TransactionalException.class, () -> repository.legeAn(benutzer));
+        assertEquals(Optional.empty(), repository.findeNachId(benutzer.id()));
     }
 
     /** E28: Die Spalte hat einen CHECK mit derselben Regex wie das Value Object. */

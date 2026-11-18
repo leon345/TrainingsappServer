@@ -7,6 +7,7 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,7 +23,7 @@ public class PanacheAusstehendeRegistrierungRepository
      * Bei parallelen Aufrufen fuer denselben Namen gewinnt der erste; alle erhalten dessen Reservierung.
      */
     @Override
-    @Transactional
+    @Transactional(TxType.MANDATORY)
     public AusstehendeRegistrierung reserviere(AusstehendeRegistrierung neu, Instant jetzt) {
         Objects.requireNonNull(neu, "neu");
         Objects.requireNonNull(jetzt, "jetzt");
@@ -42,7 +43,7 @@ public class PanacheAusstehendeRegistrierungRepository
     }
 
     @Override
-    @Transactional
+    @Transactional(TxType.MANDATORY)
     public Optional<AusstehendeRegistrierung> entnimm(Benutzername benutzername, Instant jetzt) {
         Objects.requireNonNull(benutzername, "benutzername");
         Objects.requireNonNull(jetzt, "jetzt");

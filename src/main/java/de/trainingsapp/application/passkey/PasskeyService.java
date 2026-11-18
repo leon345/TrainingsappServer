@@ -1,5 +1,6 @@
 package de.trainingsapp.application.passkey;
 
+import de.trainingsapp.application.Transaktion;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
 import de.trainingsapp.domain.benutzer.Benutzer;
@@ -36,24 +37,25 @@ public class PasskeyService {
     private final AusstehendeRegistrierungRepository ausstehende;
     private final Duration registrierungTtl;
     private final Set<Benutzername> gesperrteNamen;
+    private final Transaktion transaktion;
     private final Clock uhr;
 
     @Inject
     PasskeyService(BenutzerRepository benutzer, PasskeyRepository passkeys,
                    AusstehendeRegistrierungRepository ausstehende, PasskeyZeremonie zeremonie,
-                   Anmeldesitzung sitzung,
+                   Anmeldesitzung sitzung, Transaktion transaktion,
                    @ConfigProperty(name = "trainingsapp.passkey.ausstehende-registrierung-ttl")
                    Duration registrierungTtl,
                    @ConfigProperty(name = "trainingsapp.benutzername.gesperrt") List<String> gesperrteNamen) {
-        this(benutzer, passkeys, ausstehende, zeremonie, sitzung, registrierungTtl,
+        this(benutzer, passkeys, ausstehende, zeremonie, sitzung, transaktion, registrierungTtl,
                 gesperrteNamen.stream().map(Benutzername::aus).collect(Collectors.toUnmodifiableSet()),
                 Clock.systemUTC());
     }
 
     public PasskeyService(BenutzerRepository benutzer, PasskeyRepository passkeys,
                           AusstehendeRegistrierungRepository ausstehende, PasskeyZeremonie zeremonie,
-                          Anmeldesitzung sitzung, Duration registrierungTtl, Set<Benutzername> gesperrteNamen,
-                          Clock uhr) {
+                          Anmeldesitzung sitzung, Transaktion transaktion, Duration registrierungTtl,
+                          Set<Benutzername> gesperrteNamen, Clock uhr) {
         if (registrierungTtl.isNegative() || registrierungTtl.isZero()) {
             throw new IllegalArgumentException("TTL der ausstehenden Registrierung muss positiv sein");
         }
@@ -62,6 +64,7 @@ public class PasskeyService {
         this.ausstehende = ausstehende;
         this.zeremonie = zeremonie;
         this.sitzung = sitzung;
+        this.transaktion = transaktion;
         this.registrierungTtl = registrierungTtl;
         this.gesperrteNamen = Set.copyOf(gesperrteNamen);
         this.uhr = uhr;
@@ -85,8 +88,8 @@ public class PasskeyService {
         // gleich dem aller weiteren ist. Sie bleibt bis zum Abschluss, hoechstens bis zum Ablauf
         // der TTL reserviert; ein erneuter Versuch innerhalb der TTL erhaelt dieselbe BenutzerId.
         Instant jetzt = uhr.instant();
-        AusstehendeRegistrierung reserviert = ausstehende.reserviere(
-                new AusstehendeRegistrierung(BenutzerId.neu(), benutzername, jetzt.plus(registrierungTtl)), jetzt);
+        AusstehendeRegistrierung reserviert = transaktion.ausfuehren(() -> ausstehende.reserviere(
+                new AusstehendeRegistrierung(BenutzerId.neu(), benutzername, jetzt.plus(registrierungTtl)), jetzt));
         return zeremonie.registrierungsOptionen(new Benutzer(reserviert.vorgesehen(), benutzername), List.of());
     }
 
@@ -97,17 +100,25 @@ public class PasskeyService {
      */
     public BenutzerId registrierungAbschliessen(String eingabe, String antwortJson) {
         Benutzername benutzername = Benutzername.aus(eingabe);
+        // E26: Pruefung (und Challenge-Verbrauch) ausserhalb der Transaktion
         PasskeyZeremonie.NeuerPasskey neu = zeremonie.registrierungPruefen(antwortJson);
-        AusstehendeRegistrierung reserviert = ausstehende.entnimm(benutzername, uhr.instant())
-                .orElseThrow(() -> new PasskeyPruefungFehlgeschlagen(
-                        "Keine laufende oder eine abgelaufene Registrierung fuer diesen Benutzernamen"));
-        Benutzer angelegt = new Benutzer(reserviert.vorgesehen(), benutzername);
-        if (!benutzer.legeAn(angelegt)) {
-            throw new BenutzernameVergeben(benutzername.wert());
-        }
-        speichere(angelegt.id(), neu);
-        sitzung.starte(angelegt.id());
-        return angelegt.id();
+        Instant jetzt = uhr.instant();
+        // E26: Reservierung lesen und loeschen, Benutzer anlegen und Passkey speichern gemeinsam;
+        // scheitert ein Schritt, bleibt weder ein Benutzer ohne Passkey noch eine verbrauchte Reservierung.
+        BenutzerId angelegt = transaktion.ausfuehren(() -> {
+            AusstehendeRegistrierung reserviert = ausstehende.entnimm(benutzername, jetzt)
+                    .orElseThrow(() -> new PasskeyPruefungFehlgeschlagen(
+                            "Keine laufende oder eine abgelaufene Registrierung fuer diesen Benutzernamen"));
+            Benutzer neuerBenutzer = new Benutzer(reserviert.vorgesehen(), benutzername);
+            if (!benutzer.legeAn(neuerBenutzer)) {
+                throw new BenutzernameVergeben(benutzername.wert());
+            }
+            speichere(neuerBenutzer.id(), neu);
+            return neuerBenutzer.id();
+        });
+        // E26: Sitzung erst nach dem Commit
+        sitzung.starte(angelegt);
+        return angelegt;
     }
 
     // --- Anmeldung (unauthentifiziert) ---
@@ -118,7 +129,7 @@ public class PasskeyService {
 
     public BenutzerId anmeldungAbschliessen(String antwortJson) {
         Passkey verwendet = zeremonie.anmeldungPruefen(antwortJson);
-        passkeys.aktualisiereZaehler(verwendet.id(), verwendet.zaehler());
+        transaktion.ausfuehren(() -> passkeys.aktualisiereZaehler(verwendet.id(), verwendet.zaehler()));
         sitzung.starte(verwendet.benutzerId());
         return verwendet.benutzerId();
     }
@@ -134,7 +145,7 @@ public class PasskeyService {
 
     public Passkey weiterenPasskeyAbschliessen(BenutzerId angemeldet, String antwortJson) {
         PasskeyZeremonie.NeuerPasskey neu = zeremonie.registrierungPruefen(antwortJson);
-        return speichere(angemeldet, neu);
+        return transaktion.ausfuehren(() -> speichere(angemeldet, neu));
     }
 
     public List<Passkey> liste(BenutzerId angemeldet) {
@@ -144,7 +155,7 @@ public class PasskeyService {
     }
 
     public void loesche(BenutzerId angemeldet, PasskeyId id) {
-        switch (passkeys.loescheWennNichtLetzter(angemeldet, id)) {
+        switch (transaktion.ausfuehren(() -> passkeys.loescheWennNichtLetzter(angemeldet, id))) {
             case GELOESCHT -> { }
             case NICHT_GEFUNDEN -> throw new PasskeyNichtGefunden(id.wert());
             case LETZTER_PASSKEY -> throw new LetzterPasskey(id.wert());

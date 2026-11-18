@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.trainingsapp.application.DirekteTransaktion;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
 import de.trainingsapp.domain.benutzer.Benutzer;
@@ -57,7 +58,8 @@ class PasskeyServiceRegistrierungTest {
             public void beende() {
             }
         };
-        service = new PasskeyService(benutzer, new Passkeyablage(), ausstehende, zeremonie, sitzung, TTL,
+        service = new PasskeyService(benutzer, new Passkeyablage(), ausstehende, zeremonie, sitzung,
+                new DirekteTransaktion(), TTL,
                 Set.of(new Benutzername("admin")), uhr);
     }
 
@@ -145,7 +147,7 @@ class PasskeyServiceRegistrierungTest {
     void ttlMussPositivSein() {
         for (Duration ttl : List.of(Duration.ZERO, Duration.ofSeconds(-1))) {
             assertThrows(IllegalArgumentException.class, () -> new PasskeyService(benutzer, new Passkeyablage(),
-                    ausstehende, zeremonie, null, ttl, Set.of(), uhr));
+                    ausstehende, zeremonie, null, new DirekteTransaktion(), ttl, Set.of(), uhr));
         }
     }
 

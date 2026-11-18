@@ -7,6 +7,7 @@ import de.trainingsapp.domain.benutzer.Benutzername;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,9 +15,9 @@ import java.util.UUID;
 /**
  * Datenbank-Adapter fuer {@link BenutzerRepository} (Tabelle {@code benutzer}, V2).
  *
- * <p>Jede Methode laeuft in einer eigenen Transaktion, weil die Application-Schicht keine
- * Transaktionen kennt (E9) und die WebAuthn-Extension Lesezugriffe auch ausserhalb eines
- * Request-Kontexts ausloest.
+ * <p>Transaktionen (E26): Schreibmethoden verlangen eine laufende Transaktion ({@code MANDATORY}),
+ * die der Use-Case ueber den Port {@code application.Transaktion} oeffnet. Lesemethoden oeffnen bei
+ * Bedarf eine eigene, weil die WebAuthn-Extension sie auch ausserhalb eines Request-Kontexts aufruft.
  */
 @ApplicationScoped
 public class PanacheBenutzerRepository implements BenutzerRepository, PanacheRepositoryBase<BenutzerEntity, UUID> {
@@ -42,7 +43,7 @@ public class PanacheBenutzerRepository implements BenutzerRepository, PanacheRep
      * Registrierungen.
      */
     @Override
-    @Transactional
+    @Transactional(TxType.MANDATORY)
     public boolean legeAn(Benutzer benutzer) {
         BenutzerEntity neu = BenutzerMapper.zuEntity(benutzer);
         int angelegt = getEntityManager()

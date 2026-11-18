@@ -8,6 +8,7 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -15,7 +16,7 @@ import java.util.UUID;
 
 /**
  * Datenbank-Adapter fuer {@link PasskeyRepository} (Tabelle {@code passkey}, V2).
- * Jede Methode laeuft in einer eigenen Transaktion (siehe {@code PanacheBenutzerRepository}).
+ * Transaktionen wie in {@code PanacheBenutzerRepository} beschrieben (E26).
  */
 @ApplicationScoped
 public class PanachePasskeyRepository implements PasskeyRepository, PanacheRepositoryBase<PasskeyEntity, UUID> {
@@ -38,7 +39,7 @@ public class PanachePasskeyRepository implements PasskeyRepository, PanacheRepos
 
     /** {@code ON CONFLICT DO NOTHING}: eine schon registrierte Credential-ID ergibt {@code false}. */
     @Override
-    @Transactional
+    @Transactional(TxType.MANDATORY)
     public boolean fuegeHinzu(Passkey passkey) {
         PasskeyEntity neu = PasskeyMapper.zuNeuerEntity(passkey);
         int angelegt = getEntityManager().createNativeQuery("""
@@ -59,7 +60,7 @@ public class PanachePasskeyRepository implements PasskeyRepository, PanacheRepos
     }
 
     @Override
-    @Transactional
+    @Transactional(TxType.MANDATORY)
     public void aktualisiereZaehler(PasskeyId id, long zaehler) {
         Objects.requireNonNull(id, "id");
         update("zaehler = ?1 where credentialId = ?2", zaehler, id.wert());
@@ -70,7 +71,7 @@ public class PanachePasskeyRepository implements PasskeyRepository, PanacheRepos
      * desselben Benutzers nacheinander laufen und nie den letzten Passkey entfernen.
      */
     @Override
-    @Transactional
+    @Transactional(TxType.MANDATORY)
     public LoeschErgebnis loescheWennNichtLetzter(BenutzerId benutzerId, PasskeyId id) {
         Objects.requireNonNull(benutzerId, "benutzerId");
         Objects.requireNonNull(id, "id");

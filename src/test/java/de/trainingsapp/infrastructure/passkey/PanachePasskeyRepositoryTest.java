@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.trainingsapp.application.Transaktion;
 import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
@@ -48,6 +49,9 @@ class PanachePasskeyRepositoryTest {
     @Inject
     BenutzerRepository benutzer;
 
+    @Inject
+    Transaktion transaktion;
+
     @Test
     void portWirdVomDatenbankAdapterUmgesetzt() {
         assertInstanceOf(PanachePasskeyRepository.class, repository);
@@ -58,7 +62,7 @@ class PanachePasskeyRepositoryTest {
         BenutzerId anna = neuerBenutzer();
         Passkey passkey = passkey(anna, T0, 1023);
 
-        assertTrue(repository.fuegeHinzu(passkey));
+        assertTrue(transaktion.ausfuehren(() -> repository.fuegeHinzu(passkey)));
 
         Passkey gelesen = repository.findeNachId(passkey.id()).orElseThrow();
         assertEquals(passkey.id(), gelesen.id());
@@ -75,17 +79,17 @@ class PanachePasskeyRepositoryTest {
     void aaguidDarfFehlen() {
         BenutzerId id = neuerBenutzer();
         Passkey ohne = new Passkey(credentialId(32), id, null, new byte[] {1, 2, 3}, -7, 5, T0);
-        assertTrue(repository.fuegeHinzu(ohne));
+        assertTrue(transaktion.ausfuehren(() -> repository.fuegeHinzu(ohne)));
         assertEquals(null, repository.findeNachId(ohne.id()).orElseThrow().aaguid());
     }
 
     @Test
     void credentialIdIstGlobalEindeutig() {
         Passkey passkey = passkey(neuerBenutzer(), T0, 16);
-        assertTrue(repository.fuegeHinzu(passkey));
+        assertTrue(transaktion.ausfuehren(() -> repository.fuegeHinzu(passkey)));
         Passkey gleicheIdAndererBenutzer = new Passkey(passkey.id(), neuerBenutzer(), null, new byte[] {9}, -7, 0, T0);
 
-        assertFalse(repository.fuegeHinzu(gleicheIdAndererBenutzer));
+        assertFalse(transaktion.ausfuehren(() -> repository.fuegeHinzu(gleicheIdAndererBenutzer)));
         assertEquals(passkey.benutzerId(), repository.findeNachId(passkey.id()).orElseThrow().benutzerId());
     }
 
@@ -96,9 +100,9 @@ class PanachePasskeyRepositoryTest {
         Passkey spaet = passkey(anna, T0.plus(1, ChronoUnit.HOURS), 16);
         Passkey frueh = passkey(anna, T0, 16);
         Passkey fremd = passkey(ben, T0, 16);
-        repository.fuegeHinzu(spaet);
-        repository.fuegeHinzu(frueh);
-        repository.fuegeHinzu(fremd);
+        transaktion.ausfuehren(() -> repository.fuegeHinzu(spaet));
+        transaktion.ausfuehren(() -> repository.fuegeHinzu(frueh));
+        transaktion.ausfuehren(() -> repository.fuegeHinzu(fremd));
 
         assertEquals(List.of(frueh.id(), spaet.id()), repository.findeFuer(anna).stream().map(Passkey::id).toList());
         assertEquals(List.of(fremd.id()), repository.findeFuer(ben).stream().map(Passkey::id).toList());
@@ -108,9 +112,9 @@ class PanachePasskeyRepositoryTest {
     @Test
     void zaehlerWirdAktualisiert() {
         Passkey passkey = passkey(neuerBenutzer(), T0, 16);
-        repository.fuegeHinzu(passkey);
+        transaktion.ausfuehren(() -> repository.fuegeHinzu(passkey));
 
-        repository.aktualisiereZaehler(passkey.id(), 42);
+        transaktion.ausfuehren(() -> repository.aktualisiereZaehler(passkey.id(), 42));
 
         assertEquals(42, repository.findeNachId(passkey.id()).orElseThrow().zaehler());
     }
@@ -123,15 +127,15 @@ class PanachePasskeyRepositoryTest {
         Passkey a2 = passkey(anna, T0.plusSeconds(1), 16);
         Passkey b1 = passkey(ben, T0, 16);
         Passkey b2 = passkey(ben, T0.plusSeconds(1), 16);
-        List.of(a1, a2, b1, b2).forEach(repository::fuegeHinzu);
+        List.of(a1, a2, b1, b2).forEach(p -> transaktion.ausfuehren(() -> repository.fuegeHinzu(p)));
 
-        assertEquals(LoeschErgebnis.NICHT_GEFUNDEN, repository.loescheWennNichtLetzter(anna, b1.id()));
-        assertEquals(LoeschErgebnis.NICHT_GEFUNDEN, repository.loescheWennNichtLetzter(anna, credentialId(16)));
-        assertEquals(LoeschErgebnis.NICHT_GEFUNDEN, repository.loescheWennNichtLetzter(BenutzerId.neu(), a1.id()));
+        assertEquals(LoeschErgebnis.NICHT_GEFUNDEN, transaktion.ausfuehren(() -> repository.loescheWennNichtLetzter(anna, b1.id())));
+        assertEquals(LoeschErgebnis.NICHT_GEFUNDEN, transaktion.ausfuehren(() -> repository.loescheWennNichtLetzter(anna, credentialId(16))));
+        assertEquals(LoeschErgebnis.NICHT_GEFUNDEN, transaktion.ausfuehren(() -> repository.loescheWennNichtLetzter(BenutzerId.neu(), a1.id())));
         assertEquals(2, repository.findeFuer(ben).size());
 
-        assertEquals(LoeschErgebnis.GELOESCHT, repository.loescheWennNichtLetzter(anna, a1.id()));
-        assertEquals(LoeschErgebnis.LETZTER_PASSKEY, repository.loescheWennNichtLetzter(anna, a2.id()));
+        assertEquals(LoeschErgebnis.GELOESCHT, transaktion.ausfuehren(() -> repository.loescheWennNichtLetzter(anna, a1.id())));
+        assertEquals(LoeschErgebnis.LETZTER_PASSKEY, transaktion.ausfuehren(() -> repository.loescheWennNichtLetzter(anna, a2.id())));
         assertEquals(List.of(a2.id()), repository.findeFuer(anna).stream().map(Passkey::id).toList());
         assertEquals(Optional.empty(), repository.findeNachId(a1.id()));
     }
@@ -144,14 +148,14 @@ class PanachePasskeyRepositoryTest {
                 BenutzerId id = neuerBenutzer();
                 Passkey p1 = passkey(id, T0, 16);
                 Passkey p2 = passkey(id, T0.plusSeconds(1), 16);
-                repository.fuegeHinzu(p1);
-                repository.fuegeHinzu(p2);
+                transaktion.ausfuehren(() -> repository.fuegeHinzu(p1));
+                transaktion.ausfuehren(() -> repository.fuegeHinzu(p2));
                 CountDownLatch start = new CountDownLatch(1);
                 List<Future<LoeschErgebnis>> ergebnisse = new ArrayList<>();
                 for (Passkey p : List.of(p1, p2)) {
                     Callable<LoeschErgebnis> loeschen = () -> {
                         start.await();
-                        return repository.loescheWennNichtLetzter(id, p.id());
+                        return transaktion.ausfuehren(() -> repository.loescheWennNichtLetzter(id, p.id()));
                     };
                     ergebnisse.add(pool.submit(loeschen));
                 }
@@ -169,7 +173,7 @@ class PanachePasskeyRepositoryTest {
 
     private BenutzerId neuerBenutzer() {
         BenutzerId id = BenutzerId.neu();
-        assertTrue(benutzer.legeAn(new Benutzer(id, new Benutzername("pk-" + id.toString().substring(0, 13)))));
+        assertTrue(transaktion.ausfuehren(() -> benutzer.legeAn(new Benutzer(id, new Benutzername("pk-" + id.toString().substring(0, 13))))));
         return id;
     }
 

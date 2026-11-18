@@ -91,6 +91,13 @@
             <artifactId>quarkus-test-security-webauthn</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Architekturregeln (E23, E26) -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.5.1</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
