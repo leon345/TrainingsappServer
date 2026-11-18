@@ -2,7 +2,7 @@
 
 Backend der Trainingsapp (Intervalltimer und Workout-Tracking). Das zugehoerige Frontend liegt in [TrainingsappClient](https://github.com/leon345/TrainingsappClient).
 
-Status: Planung. Die Anforderungen unten sind der Stand vom 17.11.2026 und werden als pruefbare Ziele (`goals/`) umgesetzt.
+Status: Planung. Die Anforderungen unten sind der Stand vom 17.11.2026 und werden als pruefbare Tasks umgesetzt.
 
 ## Technik
 
