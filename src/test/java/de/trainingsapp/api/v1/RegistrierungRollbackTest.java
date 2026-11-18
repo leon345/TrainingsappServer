@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import de.trainingsapp.infrastructure.persistenz.DatenbankErforderlich;
 import de.trainingsapp.infrastructure.persistenz.MitDatenbank;
+import de.trainingsapp.testhilfe.TestOrigin;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
@@ -56,10 +57,10 @@ class RegistrierungRollbackTest {
 
     private int registrieren(String name, WebAuthnHardware geraet) {
         CookieFilter browser = new CookieFilter();
-        String challenge = new JsonObject(given().filter(browser).contentType(ContentType.JSON)
+        String challenge = new JsonObject(given().filter(browser).header("Origin", TestOrigin.wert()).contentType(ContentType.JSON)
                 .body("{\"benutzername\":\"" + name + "\"}").post("/v1/registrieren/optionen")
                 .then().statusCode(200).extract().asString()).getString("challenge");
-        return given().filter(browser).contentType(ContentType.JSON)
+        return given().filter(browser).header("Origin", TestOrigin.wert()).contentType(ContentType.JSON)
                 .body(new JsonObject().put("benutzername", name)
                         .put("credential", geraet.makeRegistrationJson(challenge)).encode())
                 .post("/v1/registrieren").then().extract().statusCode();

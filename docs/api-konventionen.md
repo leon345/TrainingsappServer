@@ -31,6 +31,22 @@ Referenzbeispiel `GET /v1/info`: `api.v1.SystemInfoResource` -> `application.sys
    - `@Schema` auf DTOs; Schemanamen tragen das Versionssuffix (z. B. `SystemInfoV1`).
 5. **Test:** Zu jedem Endpunkt gehoert ein `@QuarkusTest`, der den Pfad unter `/v<N>/...` aufruft.
 
+## Fehlerformat
+
+Fehler unter `/v1` haben einen JSON-Body nach Schema `FehlerV1`: `{"code": "...", "meldung": "..."}`.
+`code` ist stabil und maschinenlesbar, `meldung` ein Text fuer Menschen (kann sich aendern).
+
+| Status | `code` | Wann |
+|---|---|---|
+| 400 | `BENUTZERNAME_UNGUELTIG`, `BEZEICHNUNG_UNGUELTIG`, `PASSKEY_UNGUELTIG` | Eingabe oder Passkey-Antwort ungueltig |
+| 401 | `NICHT_ANGEMELDET` | ohne Anmeldung, fuer alle `/v1/*` ausser `anmelden*`/`registrieren*`, auch unbekannte Pfade (E25) |
+| 403 | `ORIGIN_UNGUELTIG` | schreibender Request (POST, PUT, PATCH, DELETE) ohne oder mit nicht erlaubtem `Origin` (E15) |
+| 404 | `PASSKEY_NICHT_GEFUNDEN` | Objekt existiert nicht oder gehoert einem anderen Benutzer |
+| 409 | `BENUTZERNAME_VERGEBEN`, `LETZTER_PASSKEY` | Konflikt mit dem Zustand |
+
+Die 401 und 403 entstehen vor JAX-RS (Vert.x-Filter bzw. Security-Challenge in `infrastructure.http`)
+und haben trotzdem dasselbe Format.
+
 ## Zeitdauern (projektweit)
 
 - Dauern werden in der API **immer als ganze Sekunden** uebertragen, Typ `integer` (`int32`).
