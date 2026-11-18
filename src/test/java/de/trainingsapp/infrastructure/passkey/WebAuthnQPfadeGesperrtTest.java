@@ -13,6 +13,9 @@ import java.util.Map;
  * Beleg: /q/webauthn/* laesst sich per HTTP-Permission-Policy sperren, ohne die
  * /v1-Endpunkte zu beeintraechtigen. Die Sperre antwortet allerdings mit 302 auf
  * quarkus.webauthn.login-page (Challenge des WebAuthn-Mechanismus), nicht mit 401/403/404.
+ *
+ * <p>Seit S-04 liefert {@code infrastructure.http.JsonAnmeldungErforderlich} stattdessen 401 als JSON;
+ * dieses Profil schliesst den Mechanismus aus, damit der Befund ueber die Extension pruefbar bleibt (E13).
  */
 @QuarkusTest
 @TestProfile(WebAuthnQPfadeGesperrtTest.QGesperrt.class)
@@ -23,7 +26,9 @@ class WebAuthnQPfadeGesperrtTest {
         public Map<String, String> getConfigOverrides() {
             return Map.of(
                     "quarkus.http.auth.permission.webauthn-q.paths", "/q/webauthn/*",
-                    "quarkus.http.auth.permission.webauthn-q.policy", "deny");
+                    "quarkus.http.auth.permission.webauthn-q.policy", "deny",
+                    // Befund ueber die Extension selbst: ohne unseren JSON-Challenge-Mechanismus (E25)
+                    "quarkus.arc.exclude-types", "de.trainingsapp.infrastructure.http.JsonAnmeldungErforderlich");
         }
     }
 
@@ -37,6 +42,7 @@ class WebAuthnQPfadeGesperrtTest {
 
     @Test
     void v1AnmeldungBleibtErreichbar() {
-        given().post("/v1/anmelden/optionen").then().statusCode(200);
+        given().header("Origin", de.trainingsapp.testhilfe.TestOrigin.wert())
+                .post("/v1/anmelden/optionen").then().statusCode(200);
     }
 }

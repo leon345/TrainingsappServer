@@ -52,9 +52,8 @@ public class PasskeyFehlerMapper {
     }
 
     /**
-     * Ohne diesen Mapper antwortet der WebAuthn-Mechanismus der Extension auf fehlende
-     * Anmeldung mit 302 auf {@code quarkus.webauthn.login-page} (Default /login.html).
-     * Fuer eine JSON-API wollen wir 401.
+     * Faellt {@code @Authenticated} in JAX-RS auf (Pfad ohne Pfad-Policy), gleiche Antwort wie die
+     * Challenge {@code infrastructure.http.JsonAnmeldungErforderlich} vor JAX-RS (E25).
      */
     @ServerExceptionMapper
     public Response nichtAngemeldet(UnauthorizedException e) {

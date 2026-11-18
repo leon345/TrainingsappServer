@@ -91,6 +91,12 @@
             <artifactId>quarkus-test-security-webauthn</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- @TestSecurity fuer Endpunkte ohne Passkey-Bezug -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-test-security</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Architekturregeln (E23, E26) -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>

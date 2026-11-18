@@ -2,6 +2,7 @@ package de.trainingsapp.api.v1;
 
 import de.trainingsapp.api.ApiVersion;
 import de.trainingsapp.application.systeminfo.SystemInfoService;
+import io.quarkus.security.Authenticated;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -16,6 +17,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
  * Beispielendpunkt der API v1.
  */
 @Path(ApiVersion.V1 + "/info")
+@Authenticated
 @Produces(MediaType.APPLICATION_JSON)
 @Tag(name = "System", description = "Technische Informationen zur Anwendung")
 public class SystemInfoResource {
@@ -32,6 +34,7 @@ public class SystemInfoResource {
     @APIResponse(responseCode = "200", description = "Systeminformationen",
             content = @Content(mediaType = MediaType.APPLICATION_JSON,
                     schema = @Schema(implementation = SystemInfoResponse.class)))
+    @APIResponse(responseCode = "401", description = "Nicht angemeldet")
     public SystemInfoResponse get() {
         return SystemInfoResponse.from(service.getSystemInfo());
     }
