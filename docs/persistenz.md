@@ -17,6 +17,25 @@ PostgreSQL, Hibernate ORM mit Panache im Repository-Muster, Schema ausschliessli
 - `architektur.PersistenzSchichtenTest` laesst den Build scheitern, wenn `domain` oder `application`
   Persistenz-Technik importieren (`jakarta.persistence`, Hibernate, Panache, Flyway, JDBC).
 
+- Uebergangs-Adapter im Arbeitsspeicher tragen `@DefaultBean` (z. B. `InMemoryIntervallEinstellungRepository`
+  bis S-02b). Sobald ein Datenbank-Adapter denselben Port umsetzt, gewinnt er automatisch; der
+  In-Memory-Adapter wird dann entfernt (so geschehen in S-04 fuer Benutzer und Passkeys).
+
+## Tabellen
+
+| Migration | Tabelle | Inhalt |
+|---|---|---|
+| V2 | `benutzer` | `BenutzerId` (UUID, zugleich WebAuthn-User-Handle) und Benutzername (Pseudonym, eindeutig ohne Gross-/Kleinschreibung) |
+| V2 | `passkey` | Passkeys je Benutzer: Credential-ID (eindeutig), oeffentlicher Schluessel, Algorithmus, Signaturzaehler; `ON DELETE CASCADE` am Benutzer |
+| V3 | `ausstehende_registrierung` | Fuer einen Benutzernamen vorgesehene `BenutzerId` zwischen Registrierungsoptionen und Abschluss, mit Ablaufzeit `gueltig_bis` (TTL `trainingsapp.passkey.ausstehende-registrierung-ttl`, Standard 10 min) |
+
+Ports und Adapter: `domain.benutzer.BenutzerRepository` -> `infrastructure.benutzer.PanacheBenutzerRepository`,
+`domain.benutzer.AusstehendeRegistrierungRepository` -> `infrastructure.benutzer.PanacheAusstehendeRegistrierungRepository`,
+`domain.passkey.PasskeyRepository` -> `infrastructure.passkey.PanachePasskeyRepository`.
+Die Application-Schicht kennt keine Transaktionen; jede Adapter-Methode laeuft in einer eigenen Transaktion.
+Konflikte (Name vergeben, Credential-ID doppelt) loesen die Adapter mit `INSERT ... ON CONFLICT DO NOTHING`,
+die Loeschsperre fuer den letzten Passkey mit einer Zeilensperre auf den Benutzer (`SELECT ... FOR UPDATE`).
+
 ## Konventionen
 
 - Migrationen: `src/main/resources/db/migration/V<Nummer>__<beschreibung_snake_case>.sql`,
