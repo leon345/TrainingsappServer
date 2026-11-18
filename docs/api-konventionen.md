@@ -46,3 +46,7 @@ mvn quarkus:dev                               # Dev-Modus mit Live-Reload, http:
 mvn package                                   # Build inkl. Tests
 java -jar target/quarkus-app/quarkus-run.jar  # gebaute Anwendung starten
 ```
+
+## Persistenz
+
+Datenbank, Migrationen, Profile und Tests: siehe `docs/persistenz.md`.
