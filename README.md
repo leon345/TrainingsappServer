@@ -11,6 +11,12 @@ Status: Planung. Die Anforderungen unten sind der Stand vom 17.11.2026 und werde
 - API-Dokumentation mit OpenAPI (Quarkus)
 - Aufbau nach Domain-Driven Design in einer Layered Architecture (Wunsch)
 
+## Entwicklung
+
+- Build: `mvn package`, Dev-Modus: `mvn quarkus:dev` (JDK 21, Maven 3.9)
+- Endpunkte sind versioniert (`/v1/...`), OpenAPI unter `/q/openapi`
+- Schichten, Paketstruktur und Konvention fuer neue Endpunkte: [docs/api-konventionen.md](docs/api-konventionen.md)
+
 ## Muss-Kriterien
 
 - Timer fuer Intervalltraining: Trainingsphase und Pause in Zeit einstellbar
