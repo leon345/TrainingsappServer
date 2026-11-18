@@ -1,7 +1,6 @@
 package de.trainingsapp.infrastructure.persistenz;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfig;
@@ -17,7 +16,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * Prueft die Profiltrennung (E9/E12) direkt an application.properties, ohne Datenbank:
  * Im Prod-Profil liefert die Datei weder JDBC-URL noch Benutzer noch Passwort,
- * sie muessen aus Umgebungsvariablen kommen. Dev und Test haben eigene Werte.
+ * sie muessen aus Umgebungsvariablen kommen. Dev und Test bekommen sie von Dev Services.
  */
 class ProdProfilZugangsdatenTest {
 
@@ -56,11 +55,25 @@ class ProdProfilZugangsdatenTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"dev", "test"})
-    void devUndTestHabenEigeneZugangsdaten(String profil) throws IOException {
+    void devUndTestNutzenDevServicesStattFesterZugangsdaten(String profil) throws IOException {
         SmallRyeConfig config = konfigurationAusDatei(profil);
         for (String schluessel : ZUGANGSDATEN) {
-            assertTrue(config.getOptionalValue(schluessel, String.class).isPresent(),
-                    schluessel + " fehlt im Profil " + profil);
+            assertEquals(Optional.empty(), config.getOptionalValue(schluessel, String.class),
+                    schluessel + " darf im Profil " + profil + " nicht fest gesetzt sein (Dev Services)");
         }
+    }
+
+    @Test
+    void devProfilSchaltetDevServicesNichtAb() throws IOException {
+        SmallRyeConfig dev = konfigurationAusDatei("dev");
+        assertEquals(Optional.empty(), dev.getOptionalValue("quarkus.datasource.devservices.enabled", Boolean.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "dev"})
+    void startOhneDatenbankWirdAbgebrochen(String profil) throws IOException {
+        SmallRyeConfig config = konfigurationAusDatei(profil);
+        assertEquals(Optional.of(true), config.getOptionalValue("trainingsapp.datenbank.pflicht", Boolean.class),
+                "DatenbankPflichtPruefung muss im Profil " + profil + " aktiv sein");
     }
 }

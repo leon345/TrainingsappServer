@@ -1,69 +1,36 @@
 package de.trainingsapp.infrastructure.persistenz;
 
-import io.smallrye.config.PropertiesConfigSource;
-import io.smallrye.config.SmallRyeConfig;
-import io.smallrye.config.SmallRyeConfigBuilder;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.URI;
-import java.nio.file.Path;
-import java.util.Optional;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
- * Fuehrt Datenbank-Tests nur aus, wenn die Test-Datenbank erreichbar ist.
+ * Datenbank-Tests sind Pflicht (E19): Ohne Datenbank bzw. ohne Docker schlagen sie fehl.
  *
- * <p>Steuerung ueber die System-Property {@code datenbank.tests}:
- * <ul>
- *   <li>nicht gesetzt: automatisch, Test wird uebersprungen, wenn der Host der
- *       Test-JDBC-URL nicht per TCP erreichbar ist,</li>
- *   <li>{@code pflicht}: Test laeuft immer (schlaegt ohne Datenbank fehl), fuer CI,</li>
- *   <li>{@code aus}: Test wird immer uebersprungen.</li>
- * </ul>
+ * <p>Nur mit {@code -Ddatenbank.tests=aus} werden sie ausdruecklich uebersprungen;
+ * dann erscheint eine WARN-Meldung im Log und die Tests als "skipped".
+ * Eine CI darf {@code aus} nie setzen. Andere Werte sind ein Fehler.
  */
 public class DatenbankVerfuegbarBedingung implements ExecutionCondition {
 
     static final String SCHALTER = "datenbank.tests";
 
+    private static final Logger LOG = Logger.getLogger(DatenbankVerfuegbarBedingung.class);
+
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
-        String modus = System.getProperty(SCHALTER, "auto");
-        if ("pflicht".equals(modus)) {
-            return ConditionEvaluationResult.enabled(SCHALTER + "=pflicht");
+        String wert = System.getProperty(SCHALTER);
+        if (wert == null) {
+            return ConditionEvaluationResult.enabled("Datenbank-Tests sind Pflicht");
         }
-        if ("aus".equals(modus)) {
-            return ConditionEvaluationResult.disabled(SCHALTER + "=aus");
+        if ("aus".equals(wert)) {
+            String test = context.getDisplayName();
+            LOG.warnf("Datenbank-Tests AUSGESCHALTET (-D%s=aus): %s wird uebersprungen. "
+                    + "Nur lokal zulaessig, nie in CI.", SCHALTER, test);
+            return ConditionEvaluationResult.disabled(SCHALTER + "=aus: Datenbank-Test uebersprungen");
         }
-        String url = testJdbcUrl();
-        URI uri = URI.create(url.substring("jdbc:".length()));
-        int port = uri.getPort() > 0 ? uri.getPort() : 5432;
-        try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(uri.getHost(), port), 1000);
-            return ConditionEvaluationResult.enabled("Datenbank erreichbar: " + uri.getHost() + ":" + port);
-        } catch (IOException e) {
-            return ConditionEvaluationResult.disabled("UEBERSPRUNGEN: keine PostgreSQL unter "
-                    + uri.getHost() + ":" + port + " erreichbar (siehe docs/persistenz.md)");
-        }
-    }
-
-    private static String testJdbcUrl() {
-        Optional<String> ausUmgebung = Optional.ofNullable(System.getenv("QUARKUS_DATASOURCE_JDBC_URL"))
-                .or(() -> Optional.ofNullable(System.getProperty("quarkus.datasource.jdbc.url")));
-        if (ausUmgebung.isPresent()) {
-            return ausUmgebung.get();
-        }
-        try {
-            SmallRyeConfig config = new SmallRyeConfigBuilder()
-                    .withProfile("test")
-                    .withSources(new PropertiesConfigSource(
-                            Path.of(ProdProfilZugangsdatenTest.ANWENDUNGSKONFIGURATION).toUri().toURL()))
-                    .build();
-            return config.getValue("quarkus.datasource.jdbc.url", String.class);
-        } catch (IOException e) {
-            throw new IllegalStateException("application.properties nicht lesbar", e);
-        }
+        throw new IllegalArgumentException("Unbekannter Wert -D" + SCHALTER + "=" + wert
+                + "; erlaubt ist nur 'aus' (ohne Schalter sind Datenbank-Tests Pflicht)");
     }
 }

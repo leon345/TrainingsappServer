@@ -7,8 +7,9 @@ import java.lang.annotation.Target;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
- * Markiert Tests, die eine erreichbare PostgreSQL-Datenbank brauchen.
- * Siehe {@link DatenbankVerfuegbarBedingung}.
+ * Markiert Tests, die eine echte PostgreSQL-Datenbank brauchen (zusammen mit
+ * {@code @TestProfile(MitDatenbank.class)}). Sie laufen immer, ausser mit
+ * {@code -Ddatenbank.tests=aus}, siehe {@link DatenbankVerfuegbarBedingung}.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
