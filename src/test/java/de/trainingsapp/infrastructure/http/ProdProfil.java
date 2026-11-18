@@ -21,6 +21,8 @@ public class ProdProfil implements QuarkusTestProfile {
                 "TRAININGSAPP_WEBAUTHN_ORIGINS", "http://localhost:8081",
                 "TRAININGSAPP_WEBAUTHN_RP_ID", "localhost",
                 "TRAININGSAPP_TRUSTED_PROXIES", "127.0.0.1",
+                "TRAININGSAPP_SITZUNG_SCHLUESSEL", "test-schluessel-nur-fuer-tests-0123456789abcdef",
+                "TRAININGSAPP_COOKIE_SECURE", "true",
                 "quarkus.flyway.clean-disabled", "false",
                 "quarkus.flyway.clean-at-start", "true",
                 "quarkus.hibernate-orm.statistics", "true",
