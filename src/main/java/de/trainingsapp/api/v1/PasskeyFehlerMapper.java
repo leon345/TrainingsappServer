@@ -4,6 +4,7 @@ import de.trainingsapp.application.passkey.BenutzernameVergeben;
 import de.trainingsapp.application.passkey.LetzterPasskey;
 import de.trainingsapp.application.passkey.PasskeyNichtGefunden;
 import de.trainingsapp.application.passkey.PasskeyPruefungFehlgeschlagen;
+import de.trainingsapp.application.sitzung.NichtAngemeldet;
 import de.trainingsapp.domain.benutzer.UngueltigerBenutzername;
 import de.trainingsapp.domain.passkey.UngueltigeBezeichnung;
 import io.quarkus.security.UnauthorizedException;
@@ -27,6 +28,11 @@ public class PasskeyFehlerMapper {
     @ServerExceptionMapper
     public Response ungueltigeBezeichnung(UngueltigeBezeichnung e) {
         return fehler(Response.Status.BAD_REQUEST, "BEZEICHNUNG_UNGUELTIG", e.getMessage());
+    }
+
+    @ServerExceptionMapper
+    public Response nichtAngemeldet(NichtAngemeldet e) {
+        return fehler(Response.Status.UNAUTHORIZED, "NICHT_ANGEMELDET", "Anmeldung erforderlich");
     }
 
     @ServerExceptionMapper

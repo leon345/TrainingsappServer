@@ -3,10 +3,8 @@ package de.trainingsapp.api.v1;
 import com.fasterxml.jackson.databind.JsonNode;
 import de.trainingsapp.api.ApiVersion;
 import de.trainingsapp.application.passkey.PasskeyService;
-import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import io.quarkus.security.Authenticated;
-import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -25,8 +23,8 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import java.util.List;
 
 /**
- * Passkey-Verwaltung des angemeldeten Benutzers. Der Benutzer ergibt sich
- * ausschliesslich aus der Sitzung, nie aus Pfad oder Body.
+ * Passkey-Verwaltung des angemeldeten Benutzers. Der Benutzer ergibt sich ausschliesslich aus
+ * der Sitzung (Port {@code Anmeldesitzung}, im Service), nie aus Pfad oder Body.
  */
 @Path(ApiVersion.V1 + "/passkeys")
 @Authenticated
@@ -35,11 +33,9 @@ import java.util.List;
 public class PasskeyResource {
 
     private final PasskeyService service;
-    private final SecurityIdentity identity;
 
-    public PasskeyResource(PasskeyService service, SecurityIdentity identity) {
+    public PasskeyResource(PasskeyService service) {
         this.service = service;
-        this.identity = identity;
     }
 
     @GET
@@ -47,7 +43,7 @@ public class PasskeyResource {
     @APIResponse(responseCode = "200", description = "Passkeys, aelteste zuerst")
     @APIResponse(responseCode = "401", description = "Nicht angemeldet")
     public List<PasskeyResponse> liste() {
-        return service.liste(angemeldet()).stream().map(PasskeyResponse::from).toList();
+        return service.liste().stream().map(PasskeyResponse::from).toList();
     }
 
     @POST
@@ -58,7 +54,7 @@ public class PasskeyResource {
     @APIResponse(responseCode = "200", description = "Optionen fuer navigator.credentials.create()")
     @APIResponse(responseCode = "401", description = "Nicht angemeldet")
     public String optionen() {
-        return service.weiterenPasskeyStarten(angemeldet());
+        return service.weiterenPasskeyStarten();
     }
 
     @POST
@@ -72,7 +68,7 @@ public class PasskeyResource {
             throw new BadRequestException("credential fehlt");
         }
         PasskeyResponse neu = PasskeyResponse.from(
-                service.weiterenPasskeyAbschliessen(angemeldet(), credential.toString()));
+                service.weiterenPasskeyAbschliessen(credential.toString()));
         return Response.status(Response.Status.CREATED).entity(neu).build();
     }
 
@@ -88,7 +84,7 @@ public class PasskeyResource {
         if (request == null) {
             throw new BadRequestException("bezeichnung fehlt");
         }
-        return PasskeyResponse.from(service.benenneUm(angemeldet(), new PasskeyId(id), request.bezeichnung()));
+        return PasskeyResponse.from(service.benenneUm(new PasskeyId(id), request.bezeichnung()));
     }
 
     @DELETE
@@ -99,10 +95,7 @@ public class PasskeyResource {
     @APIResponse(responseCode = "404", description = "Kein eigener Passkey mit dieser ID")
     @APIResponse(responseCode = "409", description = "Letzter Passkey, Loeschen gesperrt")
     public void loeschen(@PathParam("id") String id) {
-        service.loesche(angemeldet(), new PasskeyId(id));
+        service.loesche(new PasskeyId(id));
     }
 
-    private BenutzerId angemeldet() {
-        return BenutzerId.aus(identity.getPrincipal().getName());
-    }
 }

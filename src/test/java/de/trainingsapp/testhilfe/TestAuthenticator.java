@@ -73,8 +73,9 @@ public final class TestAuthenticator {
 
     public TestAuthenticator(URL server, Algorithmus algorithmus) {
         this.algorithmus = algorithmus;
-        this.origin = server.getProtocol() + "://" + server.getHost() + (server.getPort() > 0 ? ":" + server.getPort() : "");
-        this.rpId = server.getHost();
+        // Wie ein Browser auf der Seite des Servers: Origin und rpId aus der Allowlist des Testprofils
+        this.origin = TestOrigin.wert();
+        this.rpId = TestOrigin.host();
         this.schluessel = erzeugeSchluessel(algorithmus);
         new SecureRandom().nextBytes(credentialId);
     }

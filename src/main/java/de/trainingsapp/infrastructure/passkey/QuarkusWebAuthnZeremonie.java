@@ -5,11 +5,9 @@ import com.webauthn4j.data.PublicKeyCredentialDescriptor;
 import com.webauthn4j.data.PublicKeyCredentialType;
 import com.webauthn4j.data.PublicKeyCredentialUserEntity;
 import com.webauthn4j.util.Base64UrlUtil;
-import de.trainingsapp.application.passkey.Anmeldesitzung;
 import de.trainingsapp.application.passkey.PasskeyPruefungFehlgeschlagen;
 import de.trainingsapp.application.passkey.PasskeyZeremonie;
 import de.trainingsapp.domain.benutzer.Benutzer;
-import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
@@ -28,14 +26,12 @@ import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
- * Adapter der Ports {@link PasskeyZeremonie} und {@link Anmeldesitzung} auf die
- * Quarkus-WebAuthn-Extension. Es wird nur die programmatische API
- * {@link WebAuthnSecurity} genutzt; die Challenge liegt (verschluesselt) im Cookie
- * {@code quarkus.webauthn.challenge-cookie-name}, die Sitzung im Cookie
- * {@code quarkus.webauthn.cookie-name}.
+ * Adapter des Ports {@link PasskeyZeremonie} auf die Quarkus-WebAuthn-Extension. Es wird nur die
+ * programmatische API {@link WebAuthnSecurity} genutzt; die Challenge liegt (verschluesselt) im Cookie
+ * {@code quarkus.webauthn.challenge-cookie-name}. Die Sitzung setzt {@code infrastructure.sitzung.CookieAnmeldesitzung}.
  */
 @ApplicationScoped
-public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzung {
+public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie {
 
     private final WebAuthnSecurity security;
     private final CurrentVertxRequest request;
@@ -121,16 +117,6 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
         // vorhanden sein und zum Besitzer des Passkeys gehoeren. Die Extension prueft das nicht.
         pruefeUserHandle(antwortJson, gespeichert);
         return gespeichert.mitZaehler(record.getCounter());
-    }
-
-    @Override
-    public void starte(BenutzerId benutzerId) {
-        security.rememberUser(benutzerId.toString(), ctx());
-    }
-
-    @Override
-    public void beende() {
-        security.logout(ctx());
     }
 
     /**

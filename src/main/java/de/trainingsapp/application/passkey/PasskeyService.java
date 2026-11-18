@@ -1,6 +1,7 @@
 package de.trainingsapp.application.passkey;
 
 import de.trainingsapp.application.Transaktion;
+import de.trainingsapp.application.sitzung.Anmeldesitzung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
 import de.trainingsapp.domain.benutzer.Benutzer;
@@ -125,7 +126,7 @@ public class PasskeyService {
             return neuerBenutzer.id();
         });
         // E26: Sitzung erst nach dem Commit
-        sitzung.starte(angelegt);
+        sitzung.anmelden(angelegt);
         return angelegt;
     }
 
@@ -138,26 +139,35 @@ public class PasskeyService {
     public BenutzerId anmeldungAbschliessen(String antwortJson) {
         Passkey verwendet = zeremonie.anmeldungPruefen(antwortJson);
         transaktion.ausfuehren(() -> passkeys.vermerkeAnmeldung(verwendet.id(), verwendet.zaehler(), heute()));
-        sitzung.starte(verwendet.benutzerId());
+        sitzung.anmelden(verwendet.benutzerId());
         return verwendet.benutzerId();
     }
 
-    // --- Verwaltung (nur angemeldet; benutzerId stammt aus der Sitzung) ---
+    /** Beendet die Sitzung der laufenden Anfrage. */
+    public void abmelden() {
+        sitzung.beenden();
+    }
 
-    public String weiterenPasskeyStarten(BenutzerId angemeldet) {
+    // --- Verwaltung (nur angemeldet; der Benutzer stammt immer aus der Sitzung, nie aus der Anfrage) ---
+
+    /** @throws de.trainingsapp.application.sitzung.NichtAngemeldet ohne gueltige Sitzung */
+    public String weiterenPasskeyStarten() {
+        BenutzerId angemeldet = sitzung.angemeldeterBenutzer();
         Benutzer b = benutzer.findeNachId(angemeldet)
                 .orElseThrow(() -> new IllegalStateException("Angemeldeter Benutzer unbekannt: " + angemeldet));
         List<PasskeyId> vorhandene = passkeys.findeFuer(angemeldet).stream().map(Passkey::id).toList();
         return zeremonie.registrierungsOptionen(b, vorhandene).json();
     }
 
-    public Passkey weiterenPasskeyAbschliessen(BenutzerId angemeldet, String antwortJson) {
+    public Passkey weiterenPasskeyAbschliessen(String antwortJson) {
+        // E26: aktuellerBenutzer() und Pruefung ausserhalb, Speichern innerhalb der Transaktion
+        BenutzerId angemeldet = sitzung.angemeldeterBenutzer();
         PasskeyZeremonie.NeuerPasskey neu = zeremonie.registrierungPruefen(antwortJson);
         return transaktion.ausfuehren(() -> speichere(angemeldet, neu));
     }
 
-    public List<Passkey> liste(BenutzerId angemeldet) {
-        return passkeys.findeFuer(angemeldet);
+    public List<Passkey> liste() {
+        return passkeys.findeFuer(sitzung.angemeldeterBenutzer());
     }
 
     /**
@@ -166,7 +176,8 @@ public class PasskeyService {
      * @throws UngueltigeBezeichnung wenn die Bezeichnung gegen die Regeln verstoesst
      * @throws PasskeyNichtGefunden  wenn es keinen eigenen Passkey mit dieser ID gibt
      */
-    public Passkey benenneUm(BenutzerId angemeldet, PasskeyId id, String eingabe) {
+    public Passkey benenneUm(PasskeyId id, String eingabe) {
+        BenutzerId angemeldet = sitzung.angemeldeterBenutzer();
         PasskeyBezeichnung bezeichnung = PasskeyBezeichnung.aus(eingabe);
         return transaktion.ausfuehren(() -> {
             if (!passkeys.benenneUm(angemeldet, id, bezeichnung)) {
@@ -176,7 +187,8 @@ public class PasskeyService {
         });
     }
 
-    public void loesche(BenutzerId angemeldet, PasskeyId id) {
+    public void loesche(PasskeyId id) {
+        BenutzerId angemeldet = sitzung.angemeldeterBenutzer();
         switch (transaktion.ausfuehren(() -> passkeys.loescheWennNichtLetzter(angemeldet, id))) {
             case GELOESCHT -> { }
             case NICHT_GEFUNDEN -> throw new PasskeyNichtGefunden(id.wert());

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.trainingsapp.application.DirekteTransaktion;
+import de.trainingsapp.application.sitzung.Anmeldesitzung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
 import de.trainingsapp.domain.benutzer.Benutzer;
@@ -51,12 +52,17 @@ class PasskeyServiceRegistrierungTest {
     void setUp() {
         Anmeldesitzung sitzung = new Anmeldesitzung() {
             @Override
-            public void starte(BenutzerId benutzerId) {
+            public java.util.Optional<BenutzerId> aktuellerBenutzer() {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public void anmelden(BenutzerId benutzerId) {
                 gestarteteSitzungen.add(benutzerId);
             }
 
             @Override
-            public void beende() {
+            public void beenden() {
             }
         };
         service = new PasskeyService(benutzer, passkeyablage, ausstehende, zeremonie, sitzung,
