@@ -46,7 +46,7 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
     @Override
     public String registrierungsOptionen(Benutzer benutzer, List<PasskeyId> vorhandene) {
         PublicKeyCredentialCreationOptions o = security
-                .getRegisterChallenge(benutzer.benutzername(), benutzer.benutzername(), ctx())
+                .getRegisterChallenge(benutzer.benutzername().wert(), benutzer.benutzername().wert(), ctx())
                 .await().indefinitely();
         // Umweg: Die Extension (3.40) setzt user.id bei JEDEM Aufruf auf eine neue Zufalls-UUID
         // und laesst excludeCredentials leer (quarkus#44292). Fuer mehrere Passkeys pro Benutzer

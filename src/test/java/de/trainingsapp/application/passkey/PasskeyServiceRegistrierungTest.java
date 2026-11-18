@@ -10,6 +10,7 @@ import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
 import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
+import de.trainingsapp.domain.benutzer.Benutzername;
 import de.trainingsapp.domain.benutzer.UngueltigerBenutzername;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyId;
@@ -22,9 +23,9 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,8 @@ class PasskeyServiceRegistrierungTest {
             public void beende() {
             }
         };
-        service = new PasskeyService(benutzer, new Passkeyablage(), ausstehende, zeremonie, sitzung, TTL, uhr);
+        service = new PasskeyService(benutzer, new Passkeyablage(), ausstehende, zeremonie, sitzung, TTL,
+                Set.of(new Benutzername("admin")), uhr);
     }
 
     @Test
@@ -68,7 +70,7 @@ class PasskeyServiceRegistrierungTest {
         BenutzerId angelegt = service.registrierungAbschliessen("anna", "{}");
 
         assertEquals(vorgesehen, angelegt);
-        assertEquals(Optional.of(new Benutzer(vorgesehen, "anna")), benutzer.findeNachId(vorgesehen));
+        assertEquals(Optional.of(new Benutzer(vorgesehen, new Benutzername("anna"))), benutzer.findeNachId(vorgesehen));
         assertEquals(List.of(vorgesehen), gestarteteSitzungen);
         assertTrue(ausstehende.eintraege.isEmpty(), "Reservierung nach Abschluss entfernt");
     }
@@ -102,7 +104,7 @@ class PasskeyServiceRegistrierungTest {
         uhr.vor(TTL);
 
         assertThrows(PasskeyPruefungFehlgeschlagen.class, () -> service.registrierungAbschliessen("anna", "{}"));
-        assertEquals(Optional.empty(), benutzer.findeNachName("anna"));
+        assertEquals(Optional.empty(), benutzer.findeNachName(new Benutzername("anna")));
         assertEquals(List.of(), gestarteteSitzungen);
     }
 
@@ -120,8 +122,21 @@ class PasskeyServiceRegistrierungTest {
     }
 
     @Test
+    void gesperrterNameReserviertNichtsAuchInGrossschreibung() {
+        assertThrows(UngueltigerBenutzername.class, () -> service.registrierungStarten("Admin"));
+        assertTrue(ausstehende.eintraege.isEmpty());
+    }
+
+    @Test
+    void nameWirdKleingeschriebenGespeichert() {
+        service.registrierungStarten("Anna");
+        BenutzerId angelegt = service.registrierungAbschliessen("ANNA", "{}");
+        assertEquals(new Benutzername("anna"), benutzer.findeNachId(angelegt).orElseThrow().benutzername());
+    }
+
+    @Test
     void vergebenerNameReserviertNichts() {
-        benutzer.legeAn(new Benutzer(BenutzerId.neu(), "anna"));
+        benutzer.legeAn(new Benutzer(BenutzerId.neu(), new Benutzername("anna")));
         assertThrows(BenutzernameVergeben.class, () -> service.registrierungStarten("anna"));
         assertTrue(ausstehende.eintraege.isEmpty());
     }
@@ -130,7 +145,7 @@ class PasskeyServiceRegistrierungTest {
     void ttlMussPositivSein() {
         for (Duration ttl : List.of(Duration.ZERO, Duration.ofSeconds(-1))) {
             assertThrows(IllegalArgumentException.class, () -> new PasskeyService(benutzer, new Passkeyablage(),
-                    ausstehende, zeremonie, null, ttl, uhr));
+                    ausstehende, zeremonie, null, ttl, Set.of(), uhr));
         }
     }
 
@@ -163,12 +178,9 @@ class PasskeyServiceRegistrierungTest {
         }
     }
 
-    private static String schluessel(String name) {
-        return name.toLowerCase(Locale.ROOT);
-    }
 
     private static final class Benutzerablage implements BenutzerRepository {
-        final Map<String, Benutzer> nachName = new HashMap<>();
+        final Map<Benutzername, Benutzer> nachName = new HashMap<>();
 
         @Override
         public Optional<Benutzer> findeNachId(BenutzerId id) {
@@ -176,28 +188,28 @@ class PasskeyServiceRegistrierungTest {
         }
 
         @Override
-        public Optional<Benutzer> findeNachName(String name) {
-            return Optional.ofNullable(nachName.get(schluessel(name)));
+        public Optional<Benutzer> findeNachName(Benutzername name) {
+            return Optional.ofNullable(nachName.get(name));
         }
 
         @Override
         public boolean legeAn(Benutzer b) {
-            return nachName.putIfAbsent(schluessel(b.benutzername()), b) == null;
+            return nachName.putIfAbsent(b.benutzername(), b) == null;
         }
     }
 
     private static final class Reservierungen implements AusstehendeRegistrierungRepository {
-        final Map<String, AusstehendeRegistrierung> eintraege = new HashMap<>();
+        final Map<Benutzername, AusstehendeRegistrierung> eintraege = new HashMap<>();
 
         @Override
         public AusstehendeRegistrierung reserviere(AusstehendeRegistrierung neu, Instant jetzt) {
             eintraege.values().removeIf(r -> !r.istGueltigUm(jetzt));
-            return eintraege.computeIfAbsent(schluessel(neu.benutzername()), k -> neu);
+            return eintraege.computeIfAbsent(neu.benutzername(), k -> neu);
         }
 
         @Override
-        public Optional<AusstehendeRegistrierung> entnimm(String name, Instant jetzt) {
-            return Optional.ofNullable(eintraege.remove(schluessel(name))).filter(r -> r.istGueltigUm(jetzt));
+        public Optional<AusstehendeRegistrierung> entnimm(Benutzername name, Instant jetzt) {
+            return Optional.ofNullable(eintraege.remove(name)).filter(r -> r.istGueltigUm(jetzt));
         }
     }
 

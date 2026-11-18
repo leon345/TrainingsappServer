@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
+import de.trainingsapp.domain.benutzer.Benutzername;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
@@ -168,7 +169,7 @@ class PanachePasskeyRepositoryTest {
 
     private BenutzerId neuerBenutzer() {
         BenutzerId id = BenutzerId.neu();
-        assertTrue(benutzer.legeAn(new Benutzer(id, "pk-" + id.toString().substring(0, 13))));
+        assertTrue(benutzer.legeAn(new Benutzer(id, new Benutzername("pk-" + id.toString().substring(0, 13)))));
         return id;
     }
 

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
 import de.trainingsapp.domain.benutzer.BenutzerId;
+import de.trainingsapp.domain.benutzer.Benutzername;
 import de.trainingsapp.infrastructure.persistenz.DatenbankErforderlich;
 import de.trainingsapp.infrastructure.persistenz.MitDatenbank;
 import io.quarkus.test.junit.QuarkusTest;
@@ -62,11 +63,11 @@ class PanacheAusstehendeRegistrierungRepositoryTest {
         repository.reserviere(erste, jetzt);
 
         AusstehendeRegistrierung zweiterVersuch = new AusstehendeRegistrierung(BenutzerId.neu(),
-                erste.benutzername().toUpperCase(), jetzt.plus(Duration.ofMinutes(9)).plus(TTL));
+                erste.benutzername(), jetzt.plus(Duration.ofMinutes(9)).plus(TTL));
         AusstehendeRegistrierung wirksam = repository.reserviere(zweiterVersuch, jetzt.plus(Duration.ofMinutes(9)));
 
         assertEquals(erste, wirksam, "gleiche BenutzerId (User-Handle) und unveraenderte Ablaufzeit");
-        assertEquals(Optional.of(erste), repository.entnimm(erste.benutzername().toLowerCase(), jetzt.plusSeconds(1)));
+        assertEquals(Optional.of(erste), repository.entnimm(erste.benutzername(), jetzt.plusSeconds(1)));
     }
 
     @Test
@@ -108,16 +109,17 @@ class PanacheAusstehendeRegistrierungRepositoryTest {
     }
 
     private static AusstehendeRegistrierung neu(String praefix, Instant jetzt) {
-        return new AusstehendeRegistrierung(BenutzerId.neu(), praefix + "-" + UUID.randomUUID().toString().substring(0, 8),
+        return new AusstehendeRegistrierung(BenutzerId.neu(),
+                Benutzername.aus(praefix + "-" + UUID.randomUUID().toString().substring(0, 8)),
                 jetzt.plus(TTL));
     }
 
     /** Liest per JDBC an Hibernate vorbei. */
-    private int zeilenFuer(String benutzername) throws SQLException {
+    private int zeilenFuer(Benutzername benutzername) throws SQLException {
         try (Connection verbindung = dataSource.getConnection();
                 PreparedStatement abfrage = verbindung.prepareStatement(
-                        "SELECT count(*) FROM ausstehende_registrierung WHERE lower(benutzername) = lower(?)")) {
-            abfrage.setString(1, benutzername);
+                        "SELECT count(*) FROM ausstehende_registrierung WHERE benutzername = ?")) {
+            abfrage.setString(1, benutzername.wert());
             try (ResultSet ergebnis = abfrage.executeQuery()) {
                 ergebnis.next();
                 return ergebnis.getInt(1);

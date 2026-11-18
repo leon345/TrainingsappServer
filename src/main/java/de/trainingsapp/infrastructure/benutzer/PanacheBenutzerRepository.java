@@ -3,6 +3,7 @@ package de.trainingsapp.infrastructure.benutzer;
 import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
+import de.trainingsapp.domain.benutzer.Benutzername;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -29,15 +30,15 @@ public class PanacheBenutzerRepository implements BenutzerRepository, PanacheRep
 
     @Override
     @Transactional
-    public Optional<Benutzer> findeNachName(String benutzername) {
+    public Optional<Benutzer> findeNachName(Benutzername benutzername) {
         Objects.requireNonNull(benutzername, "benutzername");
-        return find("lower(benutzername) = lower(?1)", benutzername).firstResultOptional()
+        return find("benutzername", benutzername.wert()).firstResultOptional()
                 .map(BenutzerMapper::zuDomain);
     }
 
     /**
      * Legt den Benutzer an, ohne Ausnahme bei Konflikten: {@code ON CONFLICT DO NOTHING} greift
-     * fuer die ID und fuer den Namen (eindeutig ohne Gross-/Kleinschreibung), auch bei parallelen
+     * fuer die ID und fuer den Namen (UNIQUE, nur Kleinschreibung gespeichert), auch bei parallelen
      * Registrierungen.
      */
     @Override

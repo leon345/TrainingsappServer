@@ -1,12 +1,16 @@
--- V2: Benutzer und ihre Passkeys (S-04, E9, E18).
+-- V2: Benutzer und ihre Passkeys (S-04, E9, E18, E28, E29).
+-- Darf nur bis zum ersten Merge nach integration/server geaendert werden (Council, E28/E29).
 
 -- Benutzer. id ist die BenutzerId (UUID) und zugleich der WebAuthn-User-Handle (16 Rohbytes).
--- benutzername ist ein Pseudonym (E17), eindeutig ohne Unterscheidung von Gross- und Kleinschreibung.
+-- benutzername ist ein Pseudonym (E17), gespeichert nur in Kleinschreibung (E28); der CHECK
+-- enthaelt dieselbe Regex wie domain.benutzer.Benutzername.
 CREATE TABLE benutzer (
     id           uuid        PRIMARY KEY,
-    benutzername varchar(64) NOT NULL
+    benutzername varchar(32) NOT NULL,
+    CONSTRAINT benutzer_benutzername_uk UNIQUE (benutzername),
+    CONSTRAINT benutzer_benutzername_ck
+        CHECK (benutzername ~ '^[a-z0-9](?:[a-z0-9]|[._-](?=[a-z0-9])){2,31}$')
 );
-CREATE UNIQUE INDEX benutzer_benutzername_uk ON benutzer (lower(benutzername));
 
 -- Passkeys (WebAuthn-Credentials). Genau die Daten, die fuer eine Anmeldung noetig sind.
 --   id             technischer Schluessel (Konvention: uuid, vergeben von der Anwendung)

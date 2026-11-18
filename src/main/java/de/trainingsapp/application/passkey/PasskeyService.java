@@ -6,6 +6,7 @@ import de.trainingsapp.domain.benutzer.Benutzer;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.BenutzerRepository;
 import de.trainingsapp.domain.benutzer.Benutzername;
+import de.trainingsapp.domain.benutzer.UngueltigerBenutzername;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
@@ -18,6 +19,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Anwendungsfaelle rund um Passkeys: Registrieren (neuer Benutzer), Anmelden,
@@ -32,6 +35,7 @@ public class PasskeyService {
     private final Anmeldesitzung sitzung;
     private final AusstehendeRegistrierungRepository ausstehende;
     private final Duration registrierungTtl;
+    private final Set<Benutzername> gesperrteNamen;
     private final Clock uhr;
 
     @Inject
@@ -39,13 +43,17 @@ public class PasskeyService {
                    AusstehendeRegistrierungRepository ausstehende, PasskeyZeremonie zeremonie,
                    Anmeldesitzung sitzung,
                    @ConfigProperty(name = "trainingsapp.passkey.ausstehende-registrierung-ttl")
-                   Duration registrierungTtl) {
-        this(benutzer, passkeys, ausstehende, zeremonie, sitzung, registrierungTtl, Clock.systemUTC());
+                   Duration registrierungTtl,
+                   @ConfigProperty(name = "trainingsapp.benutzername.gesperrt") List<String> gesperrteNamen) {
+        this(benutzer, passkeys, ausstehende, zeremonie, sitzung, registrierungTtl,
+                gesperrteNamen.stream().map(Benutzername::aus).collect(Collectors.toUnmodifiableSet()),
+                Clock.systemUTC());
     }
 
     public PasskeyService(BenutzerRepository benutzer, PasskeyRepository passkeys,
                           AusstehendeRegistrierungRepository ausstehende, PasskeyZeremonie zeremonie,
-                          Anmeldesitzung sitzung, Duration registrierungTtl, Clock uhr) {
+                          Anmeldesitzung sitzung, Duration registrierungTtl, Set<Benutzername> gesperrteNamen,
+                          Clock uhr) {
         if (registrierungTtl.isNegative() || registrierungTtl.isZero()) {
             throw new IllegalArgumentException("TTL der ausstehenden Registrierung muss positiv sein");
         }
@@ -55,19 +63,23 @@ public class PasskeyService {
         this.zeremonie = zeremonie;
         this.sitzung = sitzung;
         this.registrierungTtl = registrierungTtl;
+        this.gesperrteNamen = Set.copyOf(gesperrteNamen);
         this.uhr = uhr;
     }
 
     // --- Registrierung eines neuen Benutzers (unauthentifiziert) ---
 
     /**
-     * @throws de.trainingsapp.domain.benutzer.UngueltigerBenutzername wenn der Name gegen E17 verstoesst
+     * @throws UngueltigerBenutzername wenn der Name gegen E28 verstoesst oder gesperrt ist
      * @throws BenutzernameVergeben wenn der Name schon vergeben ist
      */
-    public String registrierungStarten(String benutzername) {
-        Benutzername.pruefe(benutzername);
+    public String registrierungStarten(String eingabe) {
+        Benutzername benutzername = Benutzername.aus(eingabe);
+        if (gesperrteNamen.contains(benutzername)) {
+            throw new UngueltigerBenutzername("Dieser Benutzername ist nicht verfuegbar");
+        }
         if (benutzer.findeNachName(benutzername).isPresent()) {
-            throw new BenutzernameVergeben(benutzername);
+            throw new BenutzernameVergeben(benutzername.wert());
         }
         // Die BenutzerId wird schon hier vergeben, damit der User-Handle des ersten Passkeys
         // gleich dem aller weiteren ist. Sie bleibt bis zum Abschluss, hoechstens bis zum Ablauf
@@ -83,15 +95,15 @@ public class PasskeyService {
      *                                       abgelaufene) ausstehende Registrierung fuer den Namen
      * @throws BenutzernameVergeben          wenn der Name inzwischen vergeben ist
      */
-    public BenutzerId registrierungAbschliessen(String benutzername, String antwortJson) {
-        Benutzername.pruefe(benutzername);
+    public BenutzerId registrierungAbschliessen(String eingabe, String antwortJson) {
+        Benutzername benutzername = Benutzername.aus(eingabe);
         PasskeyZeremonie.NeuerPasskey neu = zeremonie.registrierungPruefen(antwortJson);
         AusstehendeRegistrierung reserviert = ausstehende.entnimm(benutzername, uhr.instant())
                 .orElseThrow(() -> new PasskeyPruefungFehlgeschlagen(
                         "Keine laufende oder eine abgelaufene Registrierung fuer diesen Benutzernamen"));
         Benutzer angelegt = new Benutzer(reserviert.vorgesehen(), benutzername);
         if (!benutzer.legeAn(angelegt)) {
-            throw new BenutzernameVergeben(benutzername);
+            throw new BenutzernameVergeben(benutzername.wert());
         }
         speichere(angelegt.id(), neu);
         sitzung.starte(angelegt.id());

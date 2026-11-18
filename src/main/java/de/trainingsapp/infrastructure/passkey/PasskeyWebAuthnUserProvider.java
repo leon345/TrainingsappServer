@@ -1,6 +1,5 @@
 package de.trainingsapp.infrastructure.passkey;
 
-import de.trainingsapp.domain.benutzer.BenutzerRepository;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
@@ -26,20 +25,21 @@ import java.util.List;
 @Blocking
 public class PasskeyWebAuthnUserProvider implements WebAuthnUserProvider {
 
-    private final BenutzerRepository benutzer;
     private final PasskeyRepository passkeys;
 
-    PasskeyWebAuthnUserProvider(BenutzerRepository benutzer, PasskeyRepository passkeys) {
-        this.benutzer = benutzer;
+    PasskeyWebAuthnUserProvider(PasskeyRepository passkeys) {
         this.passkeys = passkeys;
     }
 
+    /**
+     * Liefert bewusst immer eine leere Liste, ohne Datenbankzugriff. Die Extension (3.40) nutzt das
+     * Ergebnis nur fuer excludeCredentials bzw. allowCredentials, und beide Stellen sind dort
+     * abgeschaltet (quarkus#44292). excludeCredentials setzt {@link QuarkusWebAuthnZeremonie} selbst.
+     * So loest auch der eingebaute Endpunkt /q/webauthn/register-options-challenge keine Abfrage aus.
+     */
     @Override
     public Uni<List<WebAuthnCredentialRecord>> findByUsername(String username) {
-        List<WebAuthnCredentialRecord> records = benutzer.findeNachName(username)
-                .map(b -> passkeys.findeFuer(b.id()).stream().map(p -> zuRecord(p, username)).toList())
-                .orElse(List.of());
-        return Uni.createFrom().item(records);
+        return Uni.createFrom().item(List.of());
     }
 
     @Override

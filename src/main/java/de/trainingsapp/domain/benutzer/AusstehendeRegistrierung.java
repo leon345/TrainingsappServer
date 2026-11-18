@@ -9,7 +9,7 @@ import java.util.Objects;
  * vorgesehen. Sie wird als User-Handle an den Authenticator gegeben und muss deshalb beim
  * Abschluss dieselbe sein. Die Reservierung verfaellt nach {@code gueltigBis} (TTL, E18).
  */
-public record AusstehendeRegistrierung(BenutzerId vorgesehen, String benutzername, Instant gueltigBis) {
+public record AusstehendeRegistrierung(BenutzerId vorgesehen, Benutzername benutzername, Instant gueltigBis) {
 
     public AusstehendeRegistrierung {
         Objects.requireNonNull(vorgesehen, "vorgesehen");

@@ -4,8 +4,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Port: Ablage der ausstehenden Registrierungen (mit Ablaufzeit). Benutzernamen werden dabei
- * wie in {@link BenutzerRepository} ohne Unterscheidung von Gross- und Kleinschreibung verglichen.
+ * Port: Ablage der ausstehenden Registrierungen (mit Ablaufzeit), je Benutzername hoechstens eine.
  */
 public interface AusstehendeRegistrierungRepository {
 
@@ -24,5 +23,5 @@ public interface AusstehendeRegistrierungRepository {
      * {@code jetzt} noch gueltig ist. Eine abgelaufene Reservierung wird ebenfalls entfernt,
      * aber nicht zurueckgegeben. Hoechstens ein Aufrufer erhaelt dieselbe Reservierung.
      */
-    Optional<AusstehendeRegistrierung> entnimm(String benutzername, Instant jetzt);
+    Optional<AusstehendeRegistrierung> entnimm(Benutzername benutzername, Instant jetzt);
 }

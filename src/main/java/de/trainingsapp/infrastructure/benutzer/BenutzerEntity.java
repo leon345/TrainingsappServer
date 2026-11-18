@@ -14,6 +14,6 @@ public class BenutzerEntity {
     @Id
     public UUID id;
 
-    @Column(nullable = false, length = 64)
+    @Column(nullable = false, unique = true, length = 32)
     public String benutzername;
 }

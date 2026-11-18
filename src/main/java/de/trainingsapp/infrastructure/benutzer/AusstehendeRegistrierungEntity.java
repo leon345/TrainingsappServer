@@ -15,7 +15,7 @@ public class AusstehendeRegistrierungEntity {
     @Id
     public UUID id;
 
-    @Column(nullable = false, length = 64)
+    @Column(nullable = false, unique = true, length = 32)
     public String benutzername;
 
     @Column(nullable = false)

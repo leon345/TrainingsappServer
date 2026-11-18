@@ -7,7 +7,7 @@ public interface BenutzerRepository {
 
     Optional<Benutzer> findeNachId(BenutzerId id);
 
-    Optional<Benutzer> findeNachName(String benutzername);
+    Optional<Benutzer> findeNachName(Benutzername benutzername);
 
     /**
      * Legt den Benutzer an.

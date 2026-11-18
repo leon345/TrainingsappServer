@@ -2,6 +2,7 @@ package de.trainingsapp.infrastructure.benutzer;
 
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierung;
 import de.trainingsapp.domain.benutzer.AusstehendeRegistrierungRepository;
+import de.trainingsapp.domain.benutzer.Benutzername;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.LockModeType;
@@ -35,17 +36,17 @@ public class PanacheAusstehendeRegistrierungRepository
                 .setParameter(2, entity.benutzername)
                 .setParameter(3, entity.gueltigBis)
                 .executeUpdate();
-        return find("lower(benutzername) = lower(?1)", neu.benutzername()).firstResultOptional()
+        return find("benutzername", neu.benutzername().wert()).firstResultOptional()
                 .map(AusstehendeRegistrierungMapper::zuDomain)
                 .orElseThrow(() -> new IllegalStateException("Reservierung nach dem Anlegen nicht gefunden"));
     }
 
     @Override
     @Transactional
-    public Optional<AusstehendeRegistrierung> entnimm(String benutzername, Instant jetzt) {
+    public Optional<AusstehendeRegistrierung> entnimm(Benutzername benutzername, Instant jetzt) {
         Objects.requireNonNull(benutzername, "benutzername");
         Objects.requireNonNull(jetzt, "jetzt");
-        Optional<AusstehendeRegistrierungEntity> vorhanden = find("lower(benutzername) = lower(?1)", benutzername)
+        Optional<AusstehendeRegistrierungEntity> vorhanden = find("benutzername", benutzername.wert())
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional();
         vorhanden.ifPresent(this::delete);
