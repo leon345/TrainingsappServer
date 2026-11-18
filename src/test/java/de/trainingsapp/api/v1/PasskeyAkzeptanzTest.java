@@ -10,7 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import io.quarkus.test.common.http.TestHTTPResource;
+import de.trainingsapp.infrastructure.persistenz.DatenbankErforderlich;
+import de.trainingsapp.infrastructure.persistenz.MitDatenbank;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.security.webauthn.WebAuthnHardware;
 import io.restassured.filter.cookie.CookieFilter;
 import io.restassured.http.ContentType;
@@ -22,12 +25,15 @@ import java.util.Base64;
 import java.util.List;
 
 /**
- * Akzeptanztest des S-04-Spikes (E3): Ein Benutzer registriert zwei Passkeys, meldet sich
- * mit jedem an, listet sie, loescht einen; den letzten kann er nicht loeschen.
+ * Akzeptanztest E3 gegen PostgreSQL (E23, Abnahme 1): Ein Benutzer registriert zwei Passkeys,
+ * meldet sich mit jedem an, listet sie, loescht einen; den letzten kann er nicht loeschen.
+ * Benutzer, Passkeys und ausstehende Registrierungen liegen in der Datenbank (Flyway V2 ff.).
  * Authenticator: Software-Authenticator {@link WebAuthnHardware} der Extension
  * (fmt "none", ES256, rpId localhost). Jeder {@link CookieFilter} entspricht einem Browser.
  */
 @QuarkusTest
+@TestProfile(MitDatenbank.class)
+@DatenbankErforderlich
 class PasskeyAkzeptanzTest {
 
     @TestHTTPResource
