@@ -17,6 +17,7 @@ import io.vertx.core.json.JsonObject;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -57,6 +58,8 @@ class PasskeyAkzeptanzTest {
         assertEquals(optionen1.getJsonObject("user").getString("id"),
                 optionen2.getJsonObject("user").getString("id"));
         assertEquals(1, optionen2.getJsonArray("excludeCredentials").size());
+        // User-Handle = 16 Rohbytes der BenutzerId (E18)
+        assertEquals(16, Base64.getUrlDecoder().decode(optionen1.getJsonObject("user").getString("id")).length);
         String laptopId = given().filter(browser1).contentType(ContentType.JSON)
                 .body(laptop.makeRegistrationJson(optionen2.getString("challenge")).encode())
                 .post("/v1/passkeys")

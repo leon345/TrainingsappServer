@@ -87,6 +87,6 @@ public class PasskeyResource {
     }
 
     private BenutzerId angemeldet() {
-        return new BenutzerId(identity.getPrincipal().getName());
+        return BenutzerId.aus(identity.getPrincipal().getName());
     }
 }

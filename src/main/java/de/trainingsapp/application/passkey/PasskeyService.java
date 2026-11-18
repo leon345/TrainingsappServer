@@ -13,7 +13,6 @@ import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -54,7 +53,7 @@ public class PasskeyService {
         // Die BenutzerId wird schon hier vergeben, damit der User-Handle des ersten Passkeys
         // gleich dem aller weiteren ist. Spike: nur im Speicher, ohne Ablaufzeit.
         BenutzerId vorgesehen = ausstehend.computeIfAbsent(benutzername,
-                n -> new BenutzerId(UUID.randomUUID().toString()));
+                n -> BenutzerId.neu());
         return zeremonie.registrierungsOptionen(new Benutzer(vorgesehen, benutzername), List.of());
     }
 

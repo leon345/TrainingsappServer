@@ -45,7 +45,7 @@ public class PasskeyWebAuthnUserProvider implements WebAuthnUserProvider {
     @Override
     public Uni<WebAuthnCredentialRecord> findByCredentialId(String credentialId) {
         return passkeys.findeNachId(normalisiere(credentialId))
-                .map(p -> Uni.createFrom().item(zuRecord(p, p.benutzerId().wert())))
+                .map(p -> Uni.createFrom().item(zuRecord(p, p.benutzerId().toString())))
                 .orElseGet(() -> Uni.createFrom().failure(new IllegalArgumentException("Unbekannter Passkey")));
     }
 

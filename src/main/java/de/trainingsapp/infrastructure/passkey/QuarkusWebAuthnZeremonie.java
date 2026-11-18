@@ -21,7 +21,6 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -51,10 +50,10 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
                 .await().indefinitely();
         // Umweg: Die Extension (3.40) setzt user.id bei JEDEM Aufruf auf eine neue Zufalls-UUID
         // und laesst excludeCredentials leer (quarkus#44292). Fuer mehrere Passkeys pro Benutzer
-        // ersetzen wir beides: stabiler User-Handle aus der BenutzerId, vorhandene Passkeys ausschliessen.
+        // ersetzen wir beides: stabiler User-Handle (16 Rohbytes der BenutzerId, E18), vorhandene Passkeys ausschliessen.
         PublicKeyCredentialCreationOptions angepasst = new PublicKeyCredentialCreationOptions(
                 o.getRp(),
-                new PublicKeyCredentialUserEntity(userHandle(benutzer.id()), o.getUser().getName(),
+                new PublicKeyCredentialUserEntity(UserHandle.zuBytes(benutzer.id()), o.getUser().getName(),
                         o.getUser().getDisplayName()),
                 o.getChallenge(),
                 o.getPubKeyCredParams(),
@@ -105,20 +104,12 @@ public class QuarkusWebAuthnZeremonie implements PasskeyZeremonie, Anmeldesitzun
 
     @Override
     public void starte(BenutzerId benutzerId) {
-        security.rememberUser(benutzerId.wert(), ctx());
+        security.rememberUser(benutzerId.toString(), ctx());
     }
 
     @Override
     public void beende() {
         security.logout(ctx());
-    }
-
-    static byte[] userHandle(BenutzerId id) {
-        byte[] handle = id.wert().getBytes(StandardCharsets.UTF_8);
-        if (handle.length > 64) {
-            throw new IllegalStateException("User-Handle darf hoechstens 64 Byte lang sein (WebAuthn L3, 5.4.3)");
-        }
-        return handle;
     }
 
     private RoutingContext ctx() {
