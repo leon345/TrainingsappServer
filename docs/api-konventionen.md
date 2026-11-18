@@ -31,6 +31,40 @@ Referenzbeispiel `GET /v1/info`: `api.v1.SystemInfoResource` -> `application.sys
    - `@Schema` auf DTOs; Schemanamen tragen das Versionssuffix (z. B. `SystemInfoV1`).
 5. **Test:** Zu jedem Endpunkt gehoert ein `@QuarkusTest`, der den Pfad unter `/v<N>/...` aufruft.
 
+## Zeitdauern (projektweit)
+
+- Dauern werden in der API **immer als ganze Sekunden** uebertragen, Typ `integer` (`int32`).
+- Die Einheit steht im Feldnamen, z. B. `trainingSekunden`, `pauseSekunden`.
+- Kein ISO-8601 (`PT1M30S`), keine Bruchteile, keine Minutenfelder. Die Umrechnung
+  in Minuten fuer die Anzeige erledigt der Client.
+- Minimum und Maximum stehen im OpenAPI-Schema (`@Schema(minimum, maximum)`) und werden
+  per Bean Validation (`@Min`/`@Max`) geprueft. Die verbindlichen Grenzen definiert die Domain.
+
+## Festgelegte, noch nicht umgesetzte Schnittstellen
+
+### Timer-Einstellung (S-02b) – festgelegt, noch NICHT als Endpunkt umgesetzt
+
+Grund: Laut README sind alle Endpunkte ausser Anmelden/Registrieren nur authentifiziert
+erreichbar; die Endpunkte folgen daher erst nach S-04 (Passkey-Auth), S-05 (RBAC/ABAC)
+und S-12 (PostgreSQL/Hibernate/Flyway). Domain, Application-Service und In-Memory-Adapter
+gibt es bereits (S-02a).
+
+- Endpunkte: `GET /v1/timer/einstellung`, `PUT /v1/timer/einstellung`
+- Genau eine Einstellung je angemeldetem Benutzer, keine ID im Pfad.
+- Schema `TimerEinstellungV1`:
+
+| Feld | Typ | Pflicht | Minimum | Maximum | Bedeutung |
+|---|---|---|---|---|---|
+| `trainingSekunden` | integer (int32) | ja | 1 | 86400 | Dauer der Trainingsphase in Sekunden |
+| `pauseSekunden` | integer (int32) | ja | 0 | 86400 | Dauer der Pause in Sekunden (0 = keine Pause) |
+
+Grenzen entsprechen `domain.timer.IntervallEinstellung` (`MIN_TRAINING`, `MIN_PAUSE`, `MAX_DAUER`).
+Zuordnung im Code: `api.v1` (S-02b) -> `application.timer.TimerEinstellungService`
+(`lese`/`speichere`, Benutzer als `domain.benutzer.BenutzerId`) -> Port
+`domain.timer.IntervallEinstellungRepository`, derzeit umgesetzt durch
+`infrastructure.timer.InMemoryIntervallEinstellungRepository` (`@DefaultBean`, Daten nur im
+Arbeitsspeicher; wird durch den Datenbank-Adapter aus S-12 ersetzt).
+
 ## OpenAPI abrufen
 
 - Dokument: `/q/openapi` (YAML), `/q/openapi?format=json` (JSON)
