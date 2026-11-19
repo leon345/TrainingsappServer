@@ -1,3 +1,6 @@
+> [!NOTE]
+> **KI-Hinweis:** Dieses Projekt wurde vollständig mit KI-Agenten erstellt (Proof of Concept / „vibe-coded“). Keine Gewähr für Sicherheit, Vollständigkeit oder Verfügbarkeit.
+
 # TrainingsappServer
 
 Backend der Trainingsapp (Intervalltimer und Workout-Tracking). Das zugehoerige Frontend liegt in [TrainingsappClient](https://github.com/leon345/TrainingsappClient).
