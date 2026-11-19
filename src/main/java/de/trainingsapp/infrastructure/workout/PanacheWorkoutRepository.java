@@ -3,6 +3,7 @@ package de.trainingsapp.infrastructure.workout;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.workout.Herkunft;
 import de.trainingsapp.domain.workout.Satz;
+import de.trainingsapp.domain.workout.Sichtbarkeit;
 import de.trainingsapp.domain.workout.Uebung;
 import de.trainingsapp.domain.workout.Workout;
 import de.trainingsapp.domain.workout.WorkoutId;
@@ -13,6 +14,7 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,11 +35,38 @@ public class PanacheWorkoutRepository
     }
 
     @Override
+    public List<Workout> findeAlleNachIds(Collection<WorkoutId> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> uuids = ids.stream().map(WorkoutId::wert).distinct().toList();
+        List<WorkoutEntity> entities = getEntityManager().createQuery(
+                        "SELECT w FROM WorkoutEntity w WHERE w.id IN :ids "
+                                + "ORDER BY w.startZeit DESC, w.erstelltAm DESC, w.id ASC",
+                        WorkoutEntity.class)
+                .setParameter("ids", uuids)
+                .getResultList();
+        return ladeVollstaendig(entities);
+    }
+
+    @Override
     public List<Workout> findeAlleNachOwner(BenutzerId ownerId, WorkoutTyp optionalerTyp) {
         Sort sort = Sort.descending("startZeit").and("erstelltAm", Sort.Direction.Descending).and("id");
         List<WorkoutEntity> entities = optionalerTyp == null
                 ? find("ownerId", sort, ownerId.wert()).list()
                 : find("ownerId = ?1 and typ = ?2", sort, ownerId.wert(), optionalerTyp.name()).list();
+        return ladeVollstaendig(entities);
+    }
+
+    @Override
+    public List<Workout> findeOeffentlicheNachOwner(BenutzerId ownerId) {
+        Sort sort = Sort.descending("startZeit").and("erstelltAm", Sort.Direction.Descending).and("id");
+        List<WorkoutEntity> entities = find(
+                "ownerId = ?1 and sichtbarkeit = ?2",
+                sort,
+                ownerId.wert(),
+                Sichtbarkeit.OEFFENTLICH.name()
+        ).list();
         return ladeVollstaendig(entities);
     }
 
@@ -94,7 +123,33 @@ public class PanacheWorkoutRepository
     }
 
     @Override
+    public Workout aktualisiereSichtbarkeit(Workout aktualisiertesWorkout, long erwarteteVersion) {
+        int aktualisiert = update(
+                "sichtbarkeit = ?1, geaendertAm = ?2, version = version + 1 "
+                        + "where id = ?3 and version = ?4",
+                aktualisiertesWorkout.sichtbarkeit().name(),
+                aktualisiertesWorkout.geaendertAm(),
+                aktualisiertesWorkout.id().wert(),
+                erwarteteVersion
+        );
+        if (aktualisiert == 0) {
+            throw new WorkoutVersionskonfliktException();
+        }
+        flush();
+
+        WorkoutEntity gecacht = getEntityManager().find(WorkoutEntity.class, aktualisiertesWorkout.id().wert());
+        if (gecacht != null) {
+            getEntityManager().refresh(gecacht);
+        }
+
+        return aktualisiertesWorkout;
+    }
+
+    @Override
     public boolean loeschen(WorkoutId id) {
+        getEntityManager().createQuery("DELETE FROM WorkoutEinladungEntity e WHERE e.workoutId = :workoutId")
+                .setParameter("workoutId", id.wert())
+                .executeUpdate();
         loescheUebungenUndSaetze(id.wert());
         boolean geloescht = deleteById(id.wert());
         flush();

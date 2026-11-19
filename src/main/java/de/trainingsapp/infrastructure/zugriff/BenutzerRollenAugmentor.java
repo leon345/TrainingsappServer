@@ -30,7 +30,8 @@ public class BenutzerRollenAugmentor implements SecurityIdentityAugmentor {
         return context.runBlocking(() -> {
             Set<String> rollen = userProvider.ladeRollenFuerPrincipal(identity.getPrincipal().getName());
             if (rollen.isEmpty()) {
-                return identity;
+                // Konto existiert nicht mehr (z. B. nach Kontolöschung): Sitzung ungültig behandeln.
+                return QuarkusSecurityIdentity.builder().setAnonymous(true).build();
             }
             return QuarkusSecurityIdentity.builder(identity)
                     .addRoles(rollen)

@@ -13,6 +13,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -116,12 +117,38 @@ public class WorkoutResource {
     }
 
     @GET
+    @Path("/geteilt")
+    @Operation(
+            operationId = "listeGeteilteWorkoutsV1",
+            summary = "Geteilte Workouts auflisten",
+            description = "Liefert alle Workouts (privat und öffentlich), zu denen der angemeldete Benutzer explizit eingeladen wurde."
+    )
+    @APIResponse(
+            responseCode = "200",
+            description = "Geteilte Workouts erfolgreich geladen",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_JSON,
+                    schema = @Schema(implementation = GeteiltesWorkoutResponse[].class)
+            )
+    )
+    @APIResponse(
+            responseCode = "401",
+            description = "Nicht angemeldet",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = FehlerResponse.class))
+    )
+    public List<GeteiltesWorkoutResponse> geteilteAuflisten() {
+        return workoutService.listeGeteilteFuerAktuellenBenutzer().stream()
+                .map(GeteiltesWorkoutResponse::ausAnsicht)
+                .toList();
+    }
+
+    @GET
     @Path("/{id}")
     @PermissionsAllowed("workout:lesen")
     @Operation(
             operationId = "getWorkoutV1",
             summary = "Workout-Details abrufen",
-            description = "Liefert ein einzelnes Workout inkl. aller Übungen und Sätze. Fremde private Workouts liefern 404."
+            description = "Liefert ein einzelnes Workout inkl. aller Übungen und Sätze (Besitzer, eingeladener USER oder öffentliches Workout für USER). Unzugängliche Workouts liefern 404."
     )
     @APIResponse(
             responseCode = "200",
@@ -187,6 +214,48 @@ public class WorkoutResource {
                 new WorkoutId(id),
                 request.version(),
                 request.zuApplication()
+        );
+        return WorkoutResponse.ausDomain(aktualisiert);
+    }
+
+    @PATCH
+    @Path("/{id}/sichtbarkeit")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @PermissionsAllowed("workout:bearbeiten")
+    @Operation(
+            operationId = "aendereWorkoutSichtbarkeitV1",
+            summary = "Sichtbarkeit eines eigenen Workouts umschalten",
+            description = "Ändert die Sichtbarkeit eines eigenen Workouts zwischen PRIVAT und OEFFENTLICH."
+    )
+    @APIResponse(
+            responseCode = "200",
+            description = "Sichtbarkeit erfolgreich aktualisiert",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = WorkoutResponse.class))
+    )
+    @APIResponse(
+            responseCode = "400",
+            description = "Ungültige Eingabedaten",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = FehlerResponse.class))
+    )
+    @APIResponse(
+            responseCode = "401",
+            description = "Nicht angemeldet",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = FehlerResponse.class))
+    )
+    @APIResponse(
+            responseCode = "404",
+            description = "Workout nicht gefunden",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = FehlerResponse.class))
+    )
+    public WorkoutResponse sichtbarkeitAendern(
+            @PathParam("id") UUID id,
+            @NotNull(message = "Anfragekörper darf nicht fehlen")
+            @Valid
+            WorkoutSichtbarkeitRequest request
+    ) {
+        Workout aktualisiert = workoutService.aendereSichtbarkeitFuerAktuellenBenutzer(
+                new WorkoutId(id),
+                request.sichtbarkeit()
         );
         return WorkoutResponse.ausDomain(aktualisiert);
     }

@@ -145,6 +145,19 @@ public record Workout(
         );
     }
 
+    public Workout mitSichtbarkeit(Sichtbarkeit neueSichtbarkeit, Instant zeitpunkt) {
+        return aktualisieren(
+                typ,
+                titel,
+                startZeit,
+                dauerSekunden,
+                notiz,
+                neueSichtbarkeit,
+                uebungen,
+                zeitpunkt
+        );
+    }
+
     public Workout alsImportAktualisieren(
             WorkoutTyp neuerTyp,
             String neuerTitel,

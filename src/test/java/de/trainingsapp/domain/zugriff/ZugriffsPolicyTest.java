@@ -119,10 +119,20 @@ class ZugriffsPolicyTest {
 
         assertTrue(policy.darfWorkoutLesen(besitzer, Rolle.USER, privat));
         assertFalse(policy.darfWorkoutLesen(andererUser, Rolle.USER, privat));
+        assertTrue(policy.darfWorkoutLesen(andererUser, Rolle.USER, privat, true));
         assertTrue(policy.darfWorkoutLesen(andererUser, Rolle.USER, oeffentlich));
+        assertTrue(policy.darfWorkoutLesen(andererUser, Rolle.USER, oeffentlich, true));
         assertFalse(policy.darfWorkoutLesen(admin, Rolle.ADMIN, privat));
+        assertFalse(policy.darfWorkoutLesen(admin, Rolle.ADMIN, privat, true));
         assertFalse(policy.darfWorkoutLesen(admin, Rolle.ADMIN, oeffentlich));
+        assertFalse(policy.darfWorkoutLesen(admin, Rolle.ADMIN, oeffentlich, true));
         assertFalse(policy.darfWorkoutLesen(besitzer, Rolle.USER, null));
+
+        assertTrue(policy.darfOeffentlichesProfilLesen(besitzer, Rolle.USER, besitzer));
+        assertTrue(policy.darfOeffentlichesProfilLesen(besitzer, Rolle.ADMIN, besitzer));
+        assertTrue(policy.darfOeffentlichesProfilLesen(andererUser, Rolle.USER, besitzer));
+        assertFalse(policy.darfOeffentlichesProfilLesen(admin, Rolle.ADMIN, besitzer));
+        assertFalse(policy.darfOeffentlichesProfilLesen(null, Rolle.USER, besitzer));
 
         assertTrue(policy.darfWorkoutBearbeiten(besitzer, privat));
         assertFalse(policy.darfWorkoutBearbeiten(andererUser, privat));

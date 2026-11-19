@@ -292,6 +292,18 @@ class PasskeyKryptoUndServiceTest {
         }
 
         @Override
+        public Map<BenutzerId, Benutzer> findeAlleNachIds(java.util.Collection<BenutzerId> ids) {
+            Map<BenutzerId, Benutzer> ergebnis = new HashMap<>();
+            for (BenutzerId id : ids) {
+                Benutzer benutzer = speicher.get(id);
+                if (benutzer != null) {
+                    ergebnis.put(id, benutzer);
+                }
+            }
+            return ergebnis;
+        }
+
+        @Override
         public Optional<Benutzer> findeNachBenutzername(Benutzername benutzername) {
             return speicher.values().stream()
                     .filter(b -> b.benutzername().equals(benutzername))
@@ -311,6 +323,16 @@ class PasskeyKryptoUndServiceTest {
         @Override
         public void aktualisieren(Benutzer benutzer) {
             speicher.put(benutzer.id(), benutzer);
+        }
+
+        @Override
+        public boolean loeschen(BenutzerId id) {
+            return speicher.remove(id) != null;
+        }
+
+        @Override
+        public int loescheKontenOhnePasskeyVor(Instant stichtag) {
+            return 0;
         }
     }
 

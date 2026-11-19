@@ -15,6 +15,8 @@ import de.trainingsapp.domain.workout.Sichtbarkeit;
 import de.trainingsapp.domain.workout.Uebung;
 import de.trainingsapp.domain.workout.UebungId;
 import de.trainingsapp.domain.workout.Workout;
+import de.trainingsapp.domain.workout.WorkoutEinladung;
+import de.trainingsapp.domain.workout.WorkoutEinladungRepository;
 import de.trainingsapp.domain.workout.WorkoutId;
 import de.trainingsapp.domain.workout.WorkoutNichtGefundenException;
 import de.trainingsapp.domain.workout.WorkoutRepository;
@@ -25,8 +27,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Anwendungsservice für Kraft- und Calisthenics-Workouts inkl. Eigentümerprüfung und optimistischer Sperre.
@@ -35,6 +41,7 @@ import java.util.Objects;
 public class WorkoutService {
 
     private final WorkoutRepository workoutRepository;
+    private final WorkoutEinladungRepository workoutEinladungRepository;
     private final BenutzerRepository benutzerRepository;
     private final Anmeldesitzung anmeldesitzung;
     private final ZugriffsPolicy zugriffsPolicy;
@@ -42,12 +49,14 @@ public class WorkoutService {
 
     public WorkoutService(
             WorkoutRepository workoutRepository,
+            WorkoutEinladungRepository workoutEinladungRepository,
             BenutzerRepository benutzerRepository,
             Anmeldesitzung anmeldesitzung,
             ZugriffsPolicy zugriffsPolicy,
             Uhr uhr
     ) {
         this.workoutRepository = workoutRepository;
+        this.workoutEinladungRepository = workoutEinladungRepository;
         this.benutzerRepository = benutzerRepository;
         this.anmeldesitzung = anmeldesitzung;
         this.zugriffsPolicy = zugriffsPolicy;
@@ -67,14 +76,56 @@ public class WorkoutService {
         return listeEigene(erforderlicherBenutzerId(), optionalerTyp);
     }
 
+    public List<GeteiltesWorkoutAnsicht> listeGeteilte(BenutzerId akteur) {
+        Objects.requireNonNull(akteur, "akteur darf nicht null sein");
+        Rolle rolle = benutzerRepository.findeNachId(akteur)
+                .map(Benutzer::rolle)
+                .orElse(null);
+        List<WorkoutEinladung> einladungen = workoutEinladungRepository.findeAlleNachEingeladenerId(akteur);
+        if (einladungen.isEmpty()) {
+            return List.of();
+        }
+        Map<WorkoutId, Instant> eingeladenAmNachWorkout = new LinkedHashMap<>();
+        for (WorkoutEinladung einladung : einladungen) {
+            eingeladenAmNachWorkout.putIfAbsent(einladung.workoutId(), einladung.erstelltAm());
+        }
+        List<Workout> workouts = workoutRepository.findeAlleNachIds(eingeladenAmNachWorkout.keySet()).stream()
+                .filter(workout -> zugriffsPolicy.darfWorkoutLesen(akteur, rolle, workout, true))
+                .toList();
+        if (workouts.isEmpty()) {
+            return List.of();
+        }
+        Set<BenutzerId> ownerIds = workouts.stream()
+                .map(Workout::ownerId)
+                .collect(Collectors.toSet());
+        Map<BenutzerId, Benutzer> besitzerNachId = benutzerRepository.findeAlleNachIds(ownerIds);
+        List<GeteiltesWorkoutAnsicht> ergebnis = new ArrayList<>(workouts.size());
+        for (Workout workout : workouts) {
+            Benutzer owner = besitzerNachId.get(workout.ownerId());
+            if (owner != null) {
+                ergebnis.add(new GeteiltesWorkoutAnsicht(
+                        workout,
+                        owner.benutzername(),
+                        eingeladenAmNachWorkout.get(workout.id())
+                ));
+            }
+        }
+        return ergebnis;
+    }
+
+    public List<GeteiltesWorkoutAnsicht> listeGeteilteFuerAktuellenBenutzer() {
+        return listeGeteilte(erforderlicherBenutzerId());
+    }
+
     public Workout lese(BenutzerId akteur, WorkoutId id) {
         Objects.requireNonNull(akteur, "akteur darf nicht null sein");
         Objects.requireNonNull(id, "id darf nicht null sein");
         Rolle rolle = benutzerRepository.findeNachId(akteur)
                 .map(Benutzer::rolle)
                 .orElse(null);
+        boolean eingeladen = workoutEinladungRepository.existiertAktiveEinladung(id, akteur);
         return workoutRepository.findeNachId(id)
-                .filter(workout -> zugriffsPolicy.darfWorkoutLesen(akteur, rolle, workout))
+                .filter(workout -> zugriffsPolicy.darfWorkoutLesen(akteur, rolle, workout, eingeladen))
                 .orElseThrow(WorkoutNichtGefundenException::new);
     }
 
@@ -152,6 +203,25 @@ public class WorkoutService {
     @Transactional
     public Workout aktualisiereFuerAktuellenBenutzer(WorkoutId id, long erwarteteVersion, WorkoutEingabe eingabe) {
         return aktualisiere(erforderlicherBenutzerId(), id, erwarteteVersion, eingabe);
+    }
+
+    @Transactional
+    public Workout aendereSichtbarkeit(BenutzerId akteur, WorkoutId id, Sichtbarkeit sichtbarkeit) {
+        Objects.requireNonNull(akteur, "akteur darf nicht null sein");
+        Objects.requireNonNull(id, "id darf nicht null sein");
+        if (sichtbarkeit == null) {
+            throw new DomainException(Workout.FEHLERCODE, "Die Sichtbarkeit darf nicht fehlen.");
+        }
+        Workout vorhanden = workoutRepository.findeNachId(id)
+                .filter(workout -> zugriffsPolicy.darfWorkoutBearbeiten(akteur, workout))
+                .orElseThrow(WorkoutNichtGefundenException::new);
+        Workout aktualisiert = vorhanden.mitSichtbarkeit(sichtbarkeit, uhr.jetzt());
+        return workoutRepository.aktualisiereSichtbarkeit(aktualisiert, vorhanden.version());
+    }
+
+    @Transactional
+    public Workout aendereSichtbarkeitFuerAktuellenBenutzer(WorkoutId id, Sichtbarkeit sichtbarkeit) {
+        return aendereSichtbarkeit(erforderlicherBenutzerId(), id, sichtbarkeit);
     }
 
     @Transactional

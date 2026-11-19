@@ -5,6 +5,7 @@ import de.trainingsapp.domain.benutzer.Rolle;
 import de.trainingsapp.domain.passkey.PasskeyId;
 import de.trainingsapp.domain.passkey.PasskeyNichtGefundenException;
 import de.trainingsapp.domain.passkey.PasskeyRepository;
+import de.trainingsapp.domain.workout.WorkoutEinladungRepository;
 import de.trainingsapp.domain.workout.WorkoutId;
 import de.trainingsapp.domain.workout.WorkoutNichtGefundenException;
 import de.trainingsapp.domain.workout.WorkoutRepository;
@@ -24,15 +25,18 @@ public class ZugriffsPermissionChecker {
 
     private final PasskeyRepository passkeyRepository;
     private final WorkoutRepository workoutRepository;
+    private final WorkoutEinladungRepository workoutEinladungRepository;
     private final ZugriffsPolicy zugriffsPolicy;
 
     public ZugriffsPermissionChecker(
             PasskeyRepository passkeyRepository,
             WorkoutRepository workoutRepository,
+            WorkoutEinladungRepository workoutEinladungRepository,
             ZugriffsPolicy zugriffsPolicy
     ) {
         this.passkeyRepository = passkeyRepository;
         this.workoutRepository = workoutRepository;
+        this.workoutEinladungRepository = workoutEinladungRepository;
         this.zugriffsPolicy = zugriffsPolicy;
     }
 
@@ -63,8 +67,12 @@ public class ZugriffsPermissionChecker {
         }
         BenutzerId akteur = BenutzerId.ausText(identity.getPrincipal().getName());
         Rolle rolle = bestimmeRolle(identity);
-        boolean erlaubt = workoutRepository.findeNachId(new WorkoutId(id))
-                .map(workout -> zugriffsPolicy.darfWorkoutLesen(akteur, rolle, workout))
+        WorkoutId workoutId = new WorkoutId(id);
+        boolean erlaubt = workoutRepository.findeNachId(workoutId)
+                .map(workout -> {
+                    boolean eingeladen = workoutEinladungRepository.existiertAktiveEinladung(workoutId, akteur);
+                    return zugriffsPolicy.darfWorkoutLesen(akteur, rolle, workout, eingeladen);
+                })
                 .orElse(false);
         if (!erlaubt) {
             // Einheitlich 404 für fehlende und unzugängliche Workouts (verhindert ID-Aufzählung / IDOR-Leak).
@@ -89,6 +97,17 @@ public class ZugriffsPermissionChecker {
             throw new WorkoutNichtGefundenException();
         }
         return true;
+    }
+
+    @PermissionChecker("profil:lesen")
+    @Blocking
+    public boolean darfProfilLesen(UUID benutzerId, SecurityIdentity identity) {
+        if (identity == null || identity.isAnonymous() || benutzerId == null) {
+            return false;
+        }
+        BenutzerId akteur = BenutzerId.ausText(identity.getPrincipal().getName());
+        Rolle rolle = bestimmeRolle(identity);
+        return zugriffsPolicy.darfOeffentlichesProfilLesen(akteur, rolle, new BenutzerId(benutzerId));
     }
 
     private Rolle bestimmeRolle(SecurityIdentity identity) {

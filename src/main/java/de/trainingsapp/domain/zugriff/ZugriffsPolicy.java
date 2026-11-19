@@ -55,13 +55,27 @@ public class ZugriffsPolicy {
     }
 
     /**
-     * Prüft Lesezugriff auf ein Workout anhand von Eigentümer, Rolle und Sichtbarkeit.
+     * Prüft Lesezugriff auf ein Workout anhand von Eigentümer, Rolle und Sichtbarkeit (ohne Einladung).
      */
     public boolean darfWorkoutLesen(BenutzerId akteur, Rolle rolle, Workout workout) {
+        return darfWorkoutLesen(akteur, rolle, workout, false);
+    }
+
+    /**
+     * Prüft Lesezugriff auf ein Workout anhand von Eigentümer, Rolle, Sichtbarkeit und Einladung.
+     */
+    public boolean darfWorkoutLesen(BenutzerId akteur, Rolle rolle, Workout workout, boolean eingeladen) {
         if (workout == null) {
             return false;
         }
-        return darfTrainingsdatenLesen(akteur, rolle, workout.ownerId(), workout.istOeffentlich(), false);
+        return darfTrainingsdatenLesen(akteur, rolle, workout.ownerId(), workout.istOeffentlich(), eingeladen);
+    }
+
+    /**
+     * Prüft Lesezugriff auf öffentliche Profil-Workouts eines Benutzers (Owner oder Rolle USER; nie fremder ADMIN).
+     */
+    public boolean darfOeffentlichesProfilLesen(BenutzerId akteur, Rolle rolle, BenutzerId profilBesitzer) {
+        return darfTrainingsdatenLesen(akteur, rolle, profilBesitzer, true, false);
     }
 
     /**

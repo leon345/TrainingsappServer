@@ -159,10 +159,27 @@ class WorkoutImportServiceTest {
         }
 
         @Override
+        public List<Workout> findeAlleNachIds(java.util.Collection<WorkoutId> ids) {
+            return ids.stream()
+                    .map(speicher::get)
+                    .filter(java.util.Objects::nonNull)
+                    .sorted(Comparator.comparing(Workout::startZeit).reversed())
+                    .toList();
+        }
+
+        @Override
         public List<Workout> findeAlleNachOwner(BenutzerId ownerId, WorkoutTyp optionalerTyp) {
             return speicher.values().stream()
                     .filter(w -> w.ownerId().equals(ownerId))
                     .filter(w -> optionalerTyp == null || w.typ() == optionalerTyp)
+                    .sorted(Comparator.comparing(Workout::startZeit).reversed())
+                    .toList();
+        }
+
+        @Override
+        public List<Workout> findeOeffentlicheNachOwner(BenutzerId ownerId) {
+            return speicher.values().stream()
+                    .filter(w -> w.ownerId().equals(ownerId) && w.istOeffentlich())
                     .sorted(Comparator.comparing(Workout::startZeit).reversed())
                     .toList();
         }
@@ -193,6 +210,11 @@ class WorkoutImportServiceTest {
             }
             speicher.put(aktualisiertesWorkout.id(), aktualisiertesWorkout);
             return aktualisiertesWorkout;
+        }
+
+        @Override
+        public Workout aktualisiereSichtbarkeit(Workout aktualisiertesWorkout, long erwarteteVersion) {
+            return aktualisieren(aktualisiertesWorkout, erwarteteVersion);
         }
 
         @Override

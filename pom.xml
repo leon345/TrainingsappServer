@@ -61,6 +61,12 @@
             <artifactId>quarkus-smallrye-fault-tolerance</artifactId>
         </dependency>
 
+        <!-- Scheduler (täglicher Aufräumjob) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-scheduler</artifactId>
+        </dependency>
+
         <!-- OpenAPI & Health -->
         <dependency>
             <groupId>io.quarkus</groupId>

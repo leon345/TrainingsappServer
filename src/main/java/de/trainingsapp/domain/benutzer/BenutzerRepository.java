@@ -1,5 +1,8 @@
 package de.trainingsapp.domain.benutzer;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -9,6 +12,8 @@ public interface BenutzerRepository {
 
     Optional<Benutzer> findeNachId(BenutzerId id);
 
+    Map<BenutzerId, Benutzer> findeAlleNachIds(Collection<BenutzerId> ids);
+
     Optional<Benutzer> findeNachBenutzername(Benutzername benutzername);
 
     boolean existiertBenutzername(Benutzername benutzername);
@@ -16,4 +21,8 @@ public interface BenutzerRepository {
     void speichern(Benutzer benutzer);
 
     void aktualisieren(Benutzer benutzer);
+
+    boolean loeschen(BenutzerId id);
+
+    int loescheKontenOhnePasskeyVor(Instant stichtag);
 }
