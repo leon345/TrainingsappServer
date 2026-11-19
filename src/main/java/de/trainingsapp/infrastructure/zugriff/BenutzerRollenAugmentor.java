@@ -1,6 +1,7 @@
 package de.trainingsapp.infrastructure.zugriff;
 
 import de.trainingsapp.infrastructure.passkey.QuarkusWebAuthnUserProvider;
+import io.quarkus.security.UnauthorizedException;
 import io.quarkus.security.identity.AuthenticationRequestContext;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.SecurityIdentityAugmentor;
@@ -31,7 +32,7 @@ public class BenutzerRollenAugmentor implements SecurityIdentityAugmentor {
             Set<String> rollen = userProvider.ladeRollenFuerPrincipal(identity.getPrincipal().getName());
             if (rollen.isEmpty()) {
                 // Konto existiert nicht mehr (z. B. nach Kontolöschung): Sitzung ungültig behandeln.
-                return QuarkusSecurityIdentity.builder().setAnonymous(true).build();
+                throw new UnauthorizedException();
             }
             return QuarkusSecurityIdentity.builder(identity)
                     .addRoles(rollen)
