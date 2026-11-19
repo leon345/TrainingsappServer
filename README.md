@@ -1,62 +1,49 @@
 # TrainingsappServer
 
-Backend der Trainingsapp (Intervalltimer und Workout-Tracking). Das zugehoerige Frontend liegt in [TrainingsappClient](https://github.com/leon345/TrainingsappClient).
+Backend der Trainingsapp (Intervalltimer, Workout-/Calisthenics-Tracking, Passkey-Authentifizierung, Teilen/Profile und DSGVO-Funktionen). Das zugehörige Frontend liegt im Repository [TrainingsappClient](https://github.com/leon345/TrainingsappClient).
 
-Status: Planung. Die Anforderungen unten sind der Stand vom 17.11.2026 und werden als pruefbare Ziele (`goals/`) umgesetzt.
+**Status:** Vollständige Umsetzung aller Muss-Kriterien (`GS-01`–`GS-05` auf Branch `gemini`).
 
-## Technik
+---
 
-- Quarkus 3.40 (LTS), kein anderes Backend-Framework
-- Schnittstellen: REST, gRPC oder WebSockets (auch gemischt)
-- API-Dokumentation mit OpenAPI (Quarkus)
-- Aufbau nach Domain-Driven Design in einer Layered Architecture
-- Nutzung der Quarkus-Packages (u. a. WebAuthn und Security-Annotationen)
+## Technik & Architektur
 
-## Muss-Kriterien
+- **Framework:** Quarkus `3.40.1.2` (LTS), Java 21, Maven
+- **Architektur:** Domain-Driven Design in einer Layered Architecture (`domain`, `application`, `infrastructure`, `api.v1`), automatisiert geprüft durch ArchUnit (`ArchitekturTest`)
+- **Persistenz:** PostgreSQL + Hibernate ORM Panache + Flyway (`V1`–`V4`) + Dev Services in `%dev`/`%test`
+- **Authentifizierung & Sicherheit:** Passwortlose Passkeys (`quarkus-security-webauthn`, `ES256`/`RS256`, Multi-Passkey), RBAC (`USER`, `ADMIN`) & ABAC (`ZugriffsPolicy` + `@PermissionChecker`), Rate-Limiting (`quarkus-smallrye-fault-tolerance`), HTTP-Security-Header über `quarkus.http.header.*`
+- **API & Betrieb:** Versionierte REST-API unter `/v1/*` mit einheitlichem Fehlerformat `FehlerV1`, OpenAPI-Export nach `target/openapi/`, Health-Checks auf dem separaten Management-Port (`9000`)
 
-- Timer fuer Intervalltraining: Trainingsphase und Pause in Zeit einstellbar
-- Workouts und Calisthenics-Workouts koennen getrackt werden
-- Benutzerauthentifizierung ausschliesslich mit Passkeys (WebAuthn)
-- Jeder Benutzer kann mehrere Passkeys anlegen
-- RBAC und ABAC; Benutzer duerfen nur auf ihre eigenen Attribute zugreifen
-- Alle Endpunkte nur authentifiziert erreichbar, ausser Anmelden und Registrieren
-- Versionierte Endpunkte, z. B. `/v1/anmelden`
-- Alle Endpunkte per OpenAPI dokumentiert
-- Workout-Sichtbarkeit:
-  - Privat: nur Besitzer und eingeladene Benutzer
-  - Oeffentlich: im Profil des Besitzers und bei eingeladenen Benutzern sichtbar
-- Konformitaet mit DSGVO und weiteren EU-Vorgaben
-- Sicherheitstests und Funktionstests (Server- und Clientseite)
+---
 
-## Wunsch-Kriterien
+## Dokumentation
 
-- Weitere Benutzer zu einem Workout hinzufuegen (Lese-, optional Schreibrechte, vom Besitzer je Benutzer festlegbar)
-- Schwimm-Workouts: Bahnen, Zeit pro Bahn, Schwimmtechnik
-- Teilen der Trainingsdaten mit Apple Health
+| Dokument | Inhalt |
+| --- | --- |
+| [docs/api-konventionen.md](docs/api-konventionen.md) | Schichtenarchitektur, `/v1`-Versionierung, OpenAPI, `FehlerV1`, Zeitdauern in ganzen Sekunden |
+| [docs/auth-erweiterung.md](docs/auth-erweiterung.md) | Passkey-Architektur, dünner `Anmeldesitzung`-Port (Native-/Token-Erweiterbarkeit), RBAC/ABAC, Quarkus-`3.40.1.2`-Limitierungen |
+| [docs/erweiterungen.md](docs/erweiterungen.md) | Interner `WorkoutImport`-Port für künftige externe Trainingsdatenquellen (z. B. Apple Health) inkl. Art.-9-DSGVO-Hinweisen |
+| [docs/dsgvo-tom.md](docs/dsgvo-tom.md) | Verarbeitungsverzeichnis, TOM, Log-/Backup-Retention (14/30 Tage), Löschregeln & offene Betreiberpflichten |
+| [docs/betrieb.md](docs/betrieb.md) | Strato-/EU-Betriebsvorgaben, Pflicht-Umgebungsvariablen, Reverse Proxy, Management-Port & Smoke-Check |
+| [docs/prototyp-lokal.md](docs/prototyp-lokal.md) | Schritt-für-Schritt-Anleitung für den lokalen Vollbetrieb (Server + PostgreSQL Dev Services + Client) |
 
-## Abgrenzung
+---
 
-- Anmeldung nur mit Passkeys, keine anderen Verfahren
-- Backend nur mit Quarkus
+## Entwicklung, Build & Tests
 
-## Offene Entscheidungen
-
-- Wer sieht oeffentliche Workouts (alle angemeldeten Benutzer oder nur Eingeladene)?
-- Welche Attribute gelten fuer ABAC?
-- Unterstuetzt die Quarkus-WebAuthn-Extension mehrere Passkeys pro Benutzer? (Spike noetig)
-
-## Entwicklung & Tests
-
-Voraussetzungen: Java 21, Maven 3.9+ und laufendes Docker (fuer PostgreSQL ueber Quarkus Dev Services).
+Voraussetzungen: **Java 21**, **Maven 3.9+** und laufendes **Docker** (für PostgreSQL über Quarkus Dev Services).
 
 ```bash
-# Vollstaendiger Build inkl. aller Tests (ArchUnit, API, OpenAPI, PostgreSQL/Flyway, Prod-Profil)
-mvn clean package
+# Vollständiger Build inkl. aller Tests (Domain, ArchUnit, Passkeys, Timer, Workouts, ABAC, DSGVO,
+# Aufräumjob, %prod-Sicherheitsmatrix, IDOR-Komplettmatrix & OpenAPI-Export)
+mvn clean verify
 
 # Lokaler Entwicklungsserver (Port 8080, OpenAPI unter /q/openapi, Swagger UI unter /q/swagger-ui)
 mvn quarkus:dev
+
+# Live-/Staging-Smoke-Check (Security-Header, 401 auf /v1/*, 404 auf /q/*)
+./scripts/smoke-check.sh https://training.example.de
 ```
 
-- OpenAPI-Artefakte werden beim Build unter `target/openapi/` (`openapi.yaml` und `openapi.json`) erzeugt.
-- Architektur- und API-Konventionen sind in [docs/api-konventionen.md](docs/api-konventionen.md) dokumentiert.
-- Fuer den Produktionsbetrieb werden `DB_URL`, `DB_USER` und `DB_PASSWORD` ueber Umgebungsvariablen gesetzt; Health-Proben laufen ueber das Management-Interface (Port `9000`).
+- OpenAPI-Artefakte werden beim Build unter `target/openapi/openapi.yaml` und `target/openapi/openapi.json` erzeugt.
+- Für den Produktionsbetrieb sind `DB_URL`, `DB_USER`, `DB_PASSWORD`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGINS` und `SESSION_ENCRYPTION_KEY` über Umgebungsvariablen zu setzen (Details siehe [docs/betrieb.md](docs/betrieb.md)).
