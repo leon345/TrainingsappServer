@@ -41,9 +41,8 @@ public record WorkoutAktualisierenRequest(
         String notiz,
         @Schema(description = "Sichtbarkeit des Workouts (falls null bleibt die bisherige Sichtbarkeit erhalten)")
         Sichtbarkeit sichtbarkeit,
-        @Valid
         @Schema(description = "Übungen des Workouts in Ausführungsreihenfolge")
-        List<@NotNull(message = "Übung darf nicht null sein") UebungRequest> uebungen
+        List<@NotNull(message = "Übung darf nicht null sein") @Valid UebungRequest> uebungen
 ) {
     public WorkoutEingabe zuApplication() {
         return new WorkoutEingabe(

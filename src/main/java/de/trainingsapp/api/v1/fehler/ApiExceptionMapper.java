@@ -1,5 +1,6 @@
 package de.trainingsapp.api.v1.fehler;
 
+import de.trainingsapp.application.auth.Anmeldesitzung;
 import de.trainingsapp.domain.DomainException;
 import de.trainingsapp.domain.DomainKonfliktException;
 import de.trainingsapp.domain.DomainNichtAutorisiertException;
@@ -8,13 +9,17 @@ import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.ForbiddenException;
 import io.quarkus.security.UnauthorizedException;
 import io.smallrye.faulttolerance.api.RateLimitException;
+import io.smallrye.mutiny.Uni;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.stream.Collectors;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
@@ -25,6 +30,14 @@ import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 public class ApiExceptionMapper {
 
     private static final Logger LOG = Logger.getLogger(ApiExceptionMapper.class);
+
+    private final Anmeldesitzung anmeldesitzung;
+    private final ManagedExecutor managedExecutor;
+
+    public ApiExceptionMapper(Anmeldesitzung anmeldesitzung, ManagedExecutor managedExecutor) {
+        this.anmeldesitzung = anmeldesitzung;
+        this.managedExecutor = managedExecutor;
+    }
 
     @ServerExceptionMapper(priority = Priorities.USER - 100)
     public RestResponse<FehlerResponse> mapConstraintViolation(ConstraintViolationException exception) {
@@ -104,6 +117,28 @@ public class ApiExceptionMapper {
                 ? exception.getMessage()
                 : "Die Anfrage enthält ungültige Eingaben.";
         return jsonFehler(Response.Status.BAD_REQUEST, "VALIDIERUNG_FEHLGESCHLAGEN", meldung);
+    }
+
+    @ServerExceptionMapper
+    public Uni<Response> mapNotFound(NotFoundException exception, UriInfo uriInfo) {
+        String pfad = uriInfo != null && uriInfo.getPath() != null ? uriInfo.getPath() : "";
+        boolean istApiV1 = pfad.equals("v1") || pfad.startsWith("v1/")
+                || pfad.equals("/v1") || pfad.startsWith("/v1/");
+        if (!istApiV1) {
+            return Uni.createFrom().item(exception.getResponse());
+        }
+        return Uni.createFrom().item(() -> {
+            if (anmeldesitzung.aktuellerBenutzer().isEmpty()) {
+                return Response.status(Response.Status.UNAUTHORIZED)
+                        .type(MediaType.APPLICATION_JSON_TYPE)
+                        .entity(new FehlerResponse(
+                                "NICHT_ANGEMELDET",
+                                "Für diese Anfrage ist eine Anmeldung erforderlich."
+                        ))
+                        .build();
+            }
+            return exception.getResponse();
+        }).runSubscriptionOn(managedExecutor);
     }
 
     @ServerExceptionMapper

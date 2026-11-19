@@ -34,9 +34,8 @@ public record WorkoutErstellenRequest(
         String notiz,
         @Schema(description = "Sichtbarkeit des Workouts (Standard: PRIVAT)", examples = "PRIVAT")
         Sichtbarkeit sichtbarkeit,
-        @Valid
         @Schema(description = "Übungen des Workouts in Ausführungsreihenfolge")
-        List<@NotNull(message = "Übung darf nicht null sein") UebungRequest> uebungen
+        List<@NotNull(message = "Übung darf nicht null sein") @Valid UebungRequest> uebungen
 ) {
     public WorkoutEingabe zuApplication() {
         return new WorkoutEingabe(

@@ -20,9 +20,8 @@ public record UebungRequest(
         @Size(max = 100, message = "Übungsvariante darf höchstens 100 Zeichen lang sein")
         @Schema(description = "Optionale Progressionsstufe oder Variante", maxLength = 100, examples = "Tuck")
         String variante,
-        @Valid
         @Schema(description = "Sätze der Übung in Ausführungsreihenfolge")
-        List<@NotNull(message = "Satz darf nicht null sein") SatzRequest> saetze
+        List<@NotNull(message = "Satz darf nicht null sein") @Valid SatzRequest> saetze
 ) {
     public UebungEingabe zuApplication() {
         return new UebungEingabe(
