@@ -8,7 +8,14 @@ import de.trainingsapp.domain.benutzer.Rolle;
 import de.trainingsapp.domain.passkey.Passkey;
 import de.trainingsapp.domain.passkey.PasskeyBezeichnung;
 import de.trainingsapp.domain.passkey.PasskeyId;
+import de.trainingsapp.domain.workout.Herkunft;
+import de.trainingsapp.domain.workout.Sichtbarkeit;
+import de.trainingsapp.domain.workout.Workout;
+import de.trainingsapp.domain.workout.WorkoutId;
+import de.trainingsapp.domain.workout.WorkoutTyp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -68,5 +75,59 @@ class ZugriffsPolicyTest {
         assertTrue(policy.darfTrainingsdatenBearbeiten(besitzer, besitzer));
         assertFalse(policy.darfTrainingsdatenBearbeiten(anderer, besitzer));
         assertFalse(policy.darfTrainingsdatenBearbeiten(null, besitzer));
+    }
+
+    @Test
+    void workoutZugriffPrueftEigentuemerRolleUndSichtbarkeit() {
+        BenutzerId besitzer = BenutzerId.neu();
+        BenutzerId andererUser = BenutzerId.neu();
+        BenutzerId admin = BenutzerId.neu();
+        Instant jetzt = Instant.parse("2026-11-19T18:00:00Z");
+
+        Workout privat = new Workout(
+                WorkoutId.neu(),
+                besitzer,
+                WorkoutTyp.CALISTHENICS,
+                "Privat",
+                jetzt,
+                1800,
+                null,
+                Sichtbarkeit.PRIVAT,
+                Herkunft.MANUELL,
+                null,
+                List.of(),
+                jetzt,
+                jetzt,
+                0L
+        );
+        Workout oeffentlich = new Workout(
+                WorkoutId.neu(),
+                besitzer,
+                WorkoutTyp.KRAFT,
+                "Öffentlich",
+                jetzt,
+                1800,
+                null,
+                Sichtbarkeit.OEFFENTLICH,
+                Herkunft.MANUELL,
+                null,
+                List.of(),
+                jetzt,
+                jetzt,
+                0L
+        );
+
+        assertTrue(policy.darfWorkoutLesen(besitzer, Rolle.USER, privat));
+        assertFalse(policy.darfWorkoutLesen(andererUser, Rolle.USER, privat));
+        assertTrue(policy.darfWorkoutLesen(andererUser, Rolle.USER, oeffentlich));
+        assertFalse(policy.darfWorkoutLesen(admin, Rolle.ADMIN, privat));
+        assertFalse(policy.darfWorkoutLesen(admin, Rolle.ADMIN, oeffentlich));
+        assertFalse(policy.darfWorkoutLesen(besitzer, Rolle.USER, null));
+
+        assertTrue(policy.darfWorkoutBearbeiten(besitzer, privat));
+        assertFalse(policy.darfWorkoutBearbeiten(andererUser, privat));
+        assertFalse(policy.darfWorkoutBearbeiten(andererUser, oeffentlich));
+        assertFalse(policy.darfWorkoutBearbeiten(admin, privat));
+        assertFalse(policy.darfWorkoutBearbeiten(besitzer, null));
     }
 }

@@ -3,6 +3,7 @@ package de.trainingsapp.domain.zugriff;
 import de.trainingsapp.domain.benutzer.BenutzerId;
 import de.trainingsapp.domain.benutzer.Rolle;
 import de.trainingsapp.domain.passkey.Passkey;
+import de.trainingsapp.domain.workout.Workout;
 
 /**
  * Zentrale, framework-freie RBAC-/ABAC-Zugriffslogik der Domain-Schicht.
@@ -51,5 +52,25 @@ public class ZugriffsPolicy {
             return false;
         }
         return akteur.equals(besitzer);
+    }
+
+    /**
+     * Prüft Lesezugriff auf ein Workout anhand von Eigentümer, Rolle und Sichtbarkeit.
+     */
+    public boolean darfWorkoutLesen(BenutzerId akteur, Rolle rolle, Workout workout) {
+        if (workout == null) {
+            return false;
+        }
+        return darfTrainingsdatenLesen(akteur, rolle, workout.ownerId(), workout.istOeffentlich(), false);
+    }
+
+    /**
+     * Prüft Schreib-/Löschzugriff auf ein Workout (ausschließlich Besitzer).
+     */
+    public boolean darfWorkoutBearbeiten(BenutzerId akteur, Workout workout) {
+        if (workout == null) {
+            return false;
+        }
+        return darfTrainingsdatenBearbeiten(akteur, workout.ownerId());
     }
 }
