@@ -8,6 +8,7 @@ import io.quarkus.security.webauthn.WebAuthnCredentialRecord;
 import io.quarkus.security.webauthn.WebAuthnUserProvider;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Set;
@@ -15,6 +16,7 @@ import java.util.Set;
 /**
  * Brücke zwischen quarkus-security-webauthn und den Domain-Repositories.
  * Der Principal in Quarkus Security ist die unveränderliche BenutzerId (UUID als Text).
+ * Rollen werden blockierungsfrei über BenutzerRollenAugmentor (SecurityIdentityAugmentor) nachgeladen.
  */
 @ApplicationScoped
 public class QuarkusWebAuthnUserProvider implements WebAuthnUserProvider {
@@ -53,9 +55,9 @@ public class QuarkusWebAuthnUserProvider implements WebAuthnUserProvider {
         return Uni.createFrom().item(record);
     }
 
-    @Override
+    @ActivateRequestContext
     @Transactional
-    public Set<String> getRoles(String benutzerIdText) {
+    public Set<String> ladeRollenFuerPrincipal(String benutzerIdText) {
         BenutzerId benutzerId = parseBenutzerIdOderNull(benutzerIdText);
         if (benutzerId == null) {
             return Set.of();

@@ -59,6 +59,9 @@ public class ApiExceptionMapper {
 
     @ServerExceptionMapper(priority = Priorities.USER - 100)
     public RestResponse<FehlerResponse> mapForbidden(ForbiddenException exception) {
+        if (exception.getCause() instanceof DomainNichtGefundenException nichtGefunden) {
+            return mapDomainNichtGefunden(nichtGefunden);
+        }
         return jsonFehler(
                 Response.Status.FORBIDDEN,
                 "ZUGRIFF_VERWEIGERT",
