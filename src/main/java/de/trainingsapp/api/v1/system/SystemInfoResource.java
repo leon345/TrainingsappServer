@@ -4,6 +4,7 @@ import de.trainingsapp.api.ApiVersion;
 import de.trainingsapp.api.v1.fehler.FehlerResponse;
 import de.trainingsapp.application.system.SystemInfoService;
 import de.trainingsapp.domain.system.SystemInfo;
+import io.quarkus.security.Authenticated;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -19,6 +20,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
  */
 @Path(ApiVersion.V1 + "/info")
 @Produces(MediaType.APPLICATION_JSON)
+@Authenticated
 @Tag(name = "System", description = "Systeminformationen des Servers")
 public class SystemInfoResource {
 
@@ -32,7 +34,7 @@ public class SystemInfoResource {
     @Operation(
             operationId = "getSystemInfoV1",
             summary = "Systeminformationen abrufen",
-            description = "Liefert den Anwendungsnamen und die aktuelle Serverversion."
+            description = "Liefert den Anwendungsnamen und die aktuelle Serverversion für angemeldete Benutzer."
     )
     @APIResponse(
             responseCode = "200",
@@ -40,6 +42,14 @@ public class SystemInfoResource {
             content = @Content(
                     mediaType = MediaType.APPLICATION_JSON,
                     schema = @Schema(implementation = SystemInfoResponse.class)
+            )
+    )
+    @APIResponse(
+            responseCode = "401",
+            description = "Nicht angemeldet",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_JSON,
+                    schema = @Schema(implementation = FehlerResponse.class)
             )
     )
     @APIResponse(

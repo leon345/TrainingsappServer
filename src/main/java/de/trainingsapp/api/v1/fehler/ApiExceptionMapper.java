@@ -1,6 +1,13 @@
 package de.trainingsapp.api.v1.fehler;
 
 import de.trainingsapp.domain.DomainException;
+import de.trainingsapp.domain.DomainKonfliktException;
+import de.trainingsapp.domain.DomainNichtAutorisiertException;
+import de.trainingsapp.domain.DomainNichtGefundenException;
+import io.quarkus.security.AuthenticationFailedException;
+import io.quarkus.security.ForbiddenException;
+import io.quarkus.security.UnauthorizedException;
+import io.smallrye.faulttolerance.api.RateLimitException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.ws.rs.Priorities;
@@ -30,6 +37,57 @@ public class ApiExceptionMapper {
             meldung = "Die Anfrage enthält ungültige Eingaben.";
         }
         return jsonFehler(Response.Status.BAD_REQUEST, "VALIDIERUNG_FEHLGESCHLAGEN", meldung);
+    }
+
+    @ServerExceptionMapper(priority = Priorities.USER - 100)
+    public RestResponse<FehlerResponse> mapUnauthorized(UnauthorizedException exception) {
+        return jsonFehler(
+                Response.Status.UNAUTHORIZED,
+                "NICHT_ANGEMELDET",
+                "Für diese Anfrage ist eine Anmeldung erforderlich."
+        );
+    }
+
+    @ServerExceptionMapper(priority = Priorities.USER - 100)
+    public RestResponse<FehlerResponse> mapAuthenticationFailed(AuthenticationFailedException exception) {
+        return jsonFehler(
+                Response.Status.UNAUTHORIZED,
+                "ANMELDUNG_FEHLGESCHLAGEN",
+                "Die Anmeldung ist fehlgeschlagen."
+        );
+    }
+
+    @ServerExceptionMapper(priority = Priorities.USER - 100)
+    public RestResponse<FehlerResponse> mapForbidden(ForbiddenException exception) {
+        return jsonFehler(
+                Response.Status.FORBIDDEN,
+                "ZUGRIFF_VERWEIGERT",
+                "Du hast keine Berechtigung für diese Aktion."
+        );
+    }
+
+    @ServerExceptionMapper(priority = Priorities.USER - 100)
+    public RestResponse<FehlerResponse> mapRateLimit(RateLimitException exception) {
+        return jsonFehler(
+                Response.Status.TOO_MANY_REQUESTS,
+                "ZU_VIELE_ANFRAGEN",
+                "Zu viele Anfragen. Bitte warte einen Moment und versuche es erneut."
+        );
+    }
+
+    @ServerExceptionMapper
+    public RestResponse<FehlerResponse> mapDomainNichtAutorisiert(DomainNichtAutorisiertException exception) {
+        return jsonFehler(Response.Status.UNAUTHORIZED, exception.code(), exception.getMessage());
+    }
+
+    @ServerExceptionMapper
+    public RestResponse<FehlerResponse> mapDomainNichtGefunden(DomainNichtGefundenException exception) {
+        return jsonFehler(Response.Status.NOT_FOUND, exception.code(), exception.getMessage());
+    }
+
+    @ServerExceptionMapper
+    public RestResponse<FehlerResponse> mapDomainKonflikt(DomainKonfliktException exception) {
+        return jsonFehler(Response.Status.CONFLICT, exception.code(), exception.getMessage());
     }
 
     @ServerExceptionMapper
