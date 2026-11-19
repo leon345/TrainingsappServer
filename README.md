@@ -9,7 +9,8 @@ Status: Planung. Die Anforderungen unten sind der Stand vom 17.11.2026 und werde
 - Quarkus 3.40 (LTS), kein anderes Backend-Framework
 - Schnittstellen: REST, gRPC oder WebSockets (auch gemischt)
 - API-Dokumentation mit OpenAPI (Quarkus)
-- Aufbau nach Domain-Driven Design in einer Layered Architecture (Wunsch)
+- Aufbau nach Domain-Driven Design in einer Layered Architecture
+- Nutzung der Quarkus-Packages (u. a. WebAuthn und Security-Annotationen)
 
 ## Muss-Kriterien
 
