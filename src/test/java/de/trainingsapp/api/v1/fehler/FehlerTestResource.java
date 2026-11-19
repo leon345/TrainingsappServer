@@ -2,6 +2,7 @@ package de.trainingsapp.api.v1.fehler;
 
 import de.trainingsapp.api.ApiVersion;
 import de.trainingsapp.domain.DomainException;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.constraints.Min;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -10,7 +11,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
 /**
- * Hilfs-Ressource ausschließlich für Tests des Fehler-Mappings (FehlerV1).
+ * Hilfs-Ressource ausschließlich für Tests des Fehler-Mappings (FehlerV1) und RBAC (@RolesAllowed).
  */
 @Path(ApiVersion.V1 + "/test-fehler")
 @Produces(MediaType.APPLICATION_JSON)
@@ -26,5 +27,12 @@ public class FehlerTestResource {
     @Path("/domain")
     public String domainFehler() {
         throw new DomainException("FACHLICHER_FEHLER", "Fachliche Regel verletzt.");
+    }
+
+    @GET
+    @Path("/nur-admin")
+    @RolesAllowed("ADMIN")
+    public String nurAdmin() {
+        return "ok";
     }
 }

@@ -55,6 +55,11 @@ Das zentrale Mapping erfolgt über Quarkus REST `@ServerExceptionMapper` (`ApiEx
 | `ConstraintViolationException` | `400 Bad Request` | `VALIDIERUNG_FEHLGESCHLAGEN` |
 | `DomainException` | `400 Bad Request` | `exception.code()` |
 | `IllegalArgumentException` | `400 Bad Request` | `VALIDIERUNG_FEHLGESCHLAGEN` |
+| `UnauthorizedException` / `DomainNichtAutorisiertException` | `401 Unauthorized` | `NICHT_ANGEMELDET` / `exception.code()` |
+| `ForbiddenException` | `403 Forbidden` | `ZUGRIFF_VERWEIGERT` |
+| `DomainNichtGefundenException` | `404 Not Found` | `exception.code()` |
+| `DomainKonfliktException` | `409 Conflict` | `exception.code()` |
+| `RateLimitException` | `429 Too Many Requests` | `ZU_VIELE_ANFRAGEN` |
 | Unerwartete `Exception` | `500 Internal Server Error` | `INTERNER_FEHLER` (ohne interne Details / Stacktrace) |
 
 ---

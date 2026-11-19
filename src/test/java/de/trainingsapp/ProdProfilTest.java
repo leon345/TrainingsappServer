@@ -1,6 +1,7 @@
 package de.trainingsapp;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.nullValue;
@@ -42,7 +43,11 @@ class ProdProfilTest {
                 "/q/swagger-ui/",
                 "/q/health",
                 "/q/health/live",
-                "/q/health/ready"
+                "/q/health/ready",
+                "/q/webauthn/login-options-challenge",
+                "/q/webauthn/register-options-challenge",
+                "/q/webauthn/webauthn.js",
+                "/q/webauthn/logout"
         }) {
             given()
                     .redirects().follow(false)
@@ -55,19 +60,22 @@ class ProdProfilTest {
     }
 
     @Test
-    void systemInfoBleibtImProdProfilMitSicherheitsHeadernErreichbar() {
+    void systemInfoLiefertImProdProfilOhneAnmeldung401MitSicherheitsHeadern() {
         given()
+                .redirects().follow(false)
                 .when().get("/v1/info")
                 .then()
-                .statusCode(200)
+                .statusCode(401)
+                .contentType(containsString("application/json"))
                 .header("X-Content-Type-Options", equalTo("nosniff"))
                 .header("X-Frame-Options", equalTo("DENY"))
                 .header("Referrer-Policy", equalTo("no-referrer"))
-                .header("Content-Security-Policy", equalTo("default-src 'self'"));
+                .header("Content-Security-Policy", equalTo("default-src 'self'"))
+                .body("code", equalTo("NICHT_ANGEMELDET"));
     }
 
     @Test
-    void prodKonfigurationEnthaeltKeineHartcodiertenDbZugangsdaten() throws IOException {
+    void prodKonfigurationEnthaeltKeineHartcodiertenZugangsdatenOderSecrets() throws IOException {
         Properties props = new Properties();
         try (InputStream in = Files.newInputStream(Path.of("src/main/resources/application.properties"))) {
             props.load(in);
@@ -76,8 +84,14 @@ class ProdProfilTest {
         assertEquals("${DB_URL}", props.getProperty("%prod.quarkus.datasource.jdbc.url"));
         assertEquals("${DB_USER}", props.getProperty("%prod.quarkus.datasource.username"));
         assertEquals("${DB_PASSWORD}", props.getProperty("%prod.quarkus.datasource.password"));
+        assertEquals("${WEBAUTHN_RP_ID}", props.getProperty("%prod.quarkus.webauthn.relying-party.id"));
+        assertEquals("${WEBAUTHN_ORIGINS}", props.getProperty("%prod.quarkus.webauthn.origins"));
+        assertEquals("${SESSION_ENCRYPTION_KEY}", props.getProperty("%prod.quarkus.http.auth.session.encryption-key"));
         assertEquals("false", props.getProperty("%prod.quarkus.smallrye-openapi.enabled"));
         assertEquals("false", props.getProperty("%prod.quarkus.swagger-ui.enabled"));
         assertEquals("true", props.getProperty("quarkus.management.enabled"));
+        assertEquals("true", props.getProperty("quarkus.http.proxy.proxy-address-forwarding"));
+        assertEquals("strict", props.getProperty("quarkus.webauthn.cookie-same-site"));
+        assertEquals("ES256,RS256", props.getProperty("quarkus.webauthn.public-key-credential-parameters"));
     }
 }
